@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -16,7 +16,7 @@ services:
 
   auth:
     build:
-      context: ..
+      context: .
       dockerfile: ./services/auth/Dockerfile
     container_name: cringearium-auth
     environment:
@@ -29,7 +29,7 @@ services:
 
   courses:
     build:
-      context: ..
+      context: .
       dockerfile: ./services/courses/Dockerfile
     container_name: cringearium-courses
     environment:
@@ -42,7 +42,7 @@ services:
 
   payment:
     build:
-      context: ..
+      context: .
       dockerfile: ./services/payment/Dockerfile
     container_name: cringearium-payment
     environment:
@@ -55,7 +55,7 @@ services:
 
   ai-chat:
     build:
-      context: ..
+      context: .
       dockerfile: ./services/ai-chat/Dockerfile
     container_name: cringearium-ai-chat
     environment:
@@ -68,7 +68,7 @@ services:
 
   ai-tests:
     build:
-      context: ..
+      context: .
       dockerfile: ./services/ai-tests/Dockerfile
     container_name: cringearium-ai-tests
     environment:
