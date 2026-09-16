@@ -21,6 +21,8 @@ services:
     container_name: cringearium-auth
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_auth?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_TTL: ${JWT_TTL}
     ports:
       - "8081:8081"
     depends_on:

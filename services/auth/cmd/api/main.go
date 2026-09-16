@@ -11,18 +11,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Necromemeser/Cringearium-go/services/auth/internal/adapters/bcrypt"
+	httpadapter "github.com/Necromemeser/Cringearium-go/services/auth/internal/adapters/http"
+	"github.com/Necromemeser/Cringearium-go/services/auth/internal/adapters/jwt"
 	"github.com/Necromemeser/Cringearium-go/services/auth/internal/adapters/postgres"
+	"github.com/Necromemeser/Cringearium-go/services/auth/internal/application"
+	"github.com/Necromemeser/Cringearium-go/services/auth/internal/config"
 )
+
+const bcryptCost = 12
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
 	}
 
-	db, err := postgres.New(logger, databaseURL)
+	db, err := postgres.New(logger, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database connection failed: %v", err)
 	}
@@ -32,11 +39,30 @@ func main() {
 		log.Fatalf("migration failed: %v", err)
 	}
 
+	userRepository := postgres.NewUserRepository(db)
+	passwordHasher := bcrypt.NewHasher(bcryptCost)
+	tokenService := jwt.NewTokenService(
+		cfg.JWTSecret,
+		cfg.JWTTTL,
+	)
+
+	auth := application.NewAuth(
+		userRepository,
+		passwordHasher,
+		tokenService,
+	)
+
+	handler := httpadapter.NewHandler(auth)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("GET /health", healthHandler)
+	mux.HandleFunc("POST /api/auth/register", handler.Register)
+	mux.HandleFunc("POST /api/auth/login", handler.Login)
+	mux.HandleFunc("GET /api/auth/users/{id}", handler.GetByID)
+	mux.HandleFunc("GET /api/auth/users", handler.GetUser)
 
 	server := &http.Server{
-		Addr:              ":8081",
+		Addr:              cfg.ServerAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -44,7 +70,7 @@ func main() {
 	serverErrors := make(chan error, 1)
 
 	go func() {
-		log.Println("Cringearium Auth started on :8081")
+		log.Printf("Cringearium Auth started on %s", cfg.ServerAddr)
 
 		if err := server.ListenAndServe(); err != nil &&
 			err != http.ErrServerClosed {

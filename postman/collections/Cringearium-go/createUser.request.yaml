@@ -1,0 +1,15 @@
+$kind: http-request
+url: http://localhost:8081/api/auth/register
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \    \"username\": \"user2\",\r
+
+    \    \"email\": \"email@maal.ru\",\r
+
+    \    \"password\": \"qwerty123\"\r
+
+    }"
+order: 112372405278138

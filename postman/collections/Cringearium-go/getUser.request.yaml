@@ -1,0 +1,4 @@
+$kind: http-request
+url: http://localhost:8081/api/auth/users/2
+method: GET
+order: 2201588118013772
