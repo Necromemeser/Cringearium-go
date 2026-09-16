@@ -8,4 +8,5 @@ import (
 
 type TokenService interface {
 	Generate(ctx context.Context, user *domain.User) (string, error)
+	Validate(ctx context.Context, token string) (*domain.User, error)
 }

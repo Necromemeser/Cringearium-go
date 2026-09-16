@@ -108,48 +108,6 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	writeUserResponse(w, user)
 }
 
-func (h *Handler) GetByUsername(w http.ResponseWriter, r *http.Request) {
-	username := r.PathValue("username")
-	if username == "" {
-		http.Error(w, "invalid username", http.StatusBadRequest)
-		return
-	}
-
-	user, err := h.auth.GetByUsername(r.Context(), username)
-	if err != nil {
-		if errors.Is(err, application.ErrUserNotFound) {
-			http.Error(w, "user not found", http.StatusNotFound)
-			return
-		}
-
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	writeUserResponse(w, user)
-}
-
-func (h *Handler) GetByEmail(w http.ResponseWriter, r *http.Request) {
-	email := r.PathValue("email")
-	if email == "" {
-		http.Error(w, "invalid email", http.StatusBadRequest)
-		return
-	}
-
-	user, err := h.auth.GetByEmail(r.Context(), email)
-	if err != nil {
-		if errors.Is(err, application.ErrUserNotFound) {
-			http.Error(w, "user not found", http.StatusNotFound)
-			return
-		}
-
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	writeUserResponse(w, user)
-}
-
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	email := r.URL.Query().Get("email")
 	username := r.URL.Query().Get("username")
@@ -288,4 +246,14 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		return
 	}
+}
+
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	user, ok := UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	writeUserResponse(w, user)
 }

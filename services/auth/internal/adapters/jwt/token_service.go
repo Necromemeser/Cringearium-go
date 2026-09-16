@@ -49,3 +49,35 @@ func (t *TokenService) Generate(
 
 	return token.SignedString(t.secret)
 }
+
+func (t *TokenService) Validate(
+	_ context.Context,
+	tokenString string,
+) (*domain.User, error) {
+	var claims Claims
+
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&claims,
+		func(token *jwt.Token) (any, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, jwt.ErrSignatureInvalid
+			}
+
+			return t.secret, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+
+	return &domain.User{
+		ID:       claims.UserID,
+		Username: claims.Username,
+		Role:     domain.Role(claims.Role),
+	}, nil
+}

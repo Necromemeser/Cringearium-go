@@ -53,6 +53,7 @@ func main() {
 	)
 
 	handler := httpadapter.NewHandler(auth)
+	middleware := httpadapter.NewMiddleware(tokenService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
@@ -60,6 +61,11 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", handler.Login)
 	mux.HandleFunc("GET /api/auth/users/{id}", handler.GetByID)
 	mux.HandleFunc("GET /api/auth/users", handler.GetUser)
+
+	mux.Handle(
+		"GET /api/auth/me",
+		middleware.Auth(http.HandlerFunc(handler.Me)),
+	)
 
 	server := &http.Server{
 		Addr:              cfg.ServerAddr,
