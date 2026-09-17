@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -165,19 +164,19 @@ func TestHandlerEnrollErrors(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name: "not published",
-			course: &domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusDraft}},
+			name:       "not published",
+			course:     &domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusDraft}},
 			wantStatus: http.StatusConflict,
 		},
 		{
-			name: "paid",
-			course: &domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusPublished, Price: 99000}},
+			name:       "paid",
+			course:     &domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusPublished, Price: 99000}},
 			wantStatus: http.StatusConflict,
 		},
 		{
-			name: "already enrolled",
-			course: &domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusPublished}},
-			hasAccess: true,
+			name:       "already enrolled",
+			course:     &domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusPublished}},
+			hasAccess:  true,
 			wantStatus: http.StatusConflict,
 		},
 	}
@@ -270,5 +269,3 @@ func TestUserIDFromHeaderInvalid(t *testing.T) {
 		t.Fatal("userIDFromHeader() error = nil, want error")
 	}
 }
-
-var _ = context.Background
