@@ -72,16 +72,10 @@ func (c *Courses) GetTest(ctx context.Context, userID, pageID int64) (*domain.Te
 func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer) (*domain.TestResult, error) {
 	if len(answers) == 0 { return nil, ErrInvalidTestAnswers }
 
-	var test *domain.Test
-	var err error
-	for _, pageID := range []int64{} {
-		_ = pageID
-	}
-	if test, err = c.repository.FindTestByID(ctx, userID, testID); err != nil {
-		return nil, err
-	}
+	test, err := c.repository.FindTestByID(ctx, userID, testID)
+	if err != nil { return nil, err }
 	if test == nil { return nil, ErrTestNotFound }
-	if len(answers) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
+	if len(test.Questions) == 0 || len(answers) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
 
 	correctByQuestion := make(map[int64]int64, len(test.Questions))
 	questionIDs := make(map[int64]struct{}, len(test.Questions))
