@@ -53,7 +53,7 @@ func (h *Handler) GetAccess(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetEnrolled(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
-	courses, err := h.courses.FindEnrolled(r.Context(), userID); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
+	courses, err := h.courses.FindEnrolled(ctxOrBackground(r), userID); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	response := make([]courseResponse, 0, len(courses)); for _, course := range courses { response = append(response, toCourseResponse(course)) }; writeJSON(w, http.StatusOK, response)
 }
 
@@ -102,7 +102,8 @@ func toTestResponse(test *domain.Test, attempt *domain.TestAttempt) testResponse
 func toAttemptAnswerResponses(answers []domain.TestAttemptAnswer, test *domain.Test) []testAttemptAnswerResponse {
 	result := make([]testAttemptAnswerResponse, 0, len(answers)); correct := make(map[int64]int64)
 	if test != nil { for _, question := range test.Questions { for _, answer := range question.Answers { if answer.IsCorrect { correct[question.ID] = answer.ID } } } }
-	for _, answer := range answers { result = append(result, testAttemptAnswerResponse{QuestionID: answer.QuestionID, AnswerID: answer.AnswerID, IsCorrect: correct[answer.QuestionID] == answer.AnswerID}) }
+	for _, answer := range answers { isCorrect := answer.IsCorrect; if test != nil { isCorrect = correct[answer.QuestionID] == answer.AnswerID }; result = append(result, testAttemptAnswerResponse{QuestionID: answer.QuestionID, AnswerID: answer.AnswerID, IsCorrect: isCorrect}) }
 	return result
 }
+func ctxOrBackground(r *http.Request) context.Context { return r.Context() }
 func writeJSON(w http.ResponseWriter, status int, value any) { w.Header().Set("Content-Type", "application/json"); w.WriteHeader(status); _ = json.NewEncoder(w).Encode(value) }
