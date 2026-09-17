@@ -11,7 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	courseshttp "github.com/Necromemeser/Cringearium-go/services/courses/internal/adapters/http"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/adapters/postgres"
+	"github.com/Necromemeser/Cringearium-go/services/courses/internal/application"
 )
 
 func main() {
@@ -32,8 +34,15 @@ func main() {
 		log.Fatalf("migration failed: %v", err)
 	}
 
+	courseService := application.NewCourses(db)
+	handler := courseshttp.NewHandler(courseService)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("GET /api/courses", handler.GetAll)
+	mux.HandleFunc("GET /api/courses/{id}", handler.GetByID)
+	mux.HandleFunc("POST /api/courses/{id}/enroll", handler.Enroll)
+	mux.HandleFunc("GET /api/courses/{id}/access", handler.GetAccess)
 
 	server := &http.Server{
 		Addr:              ":8082",
