@@ -50,14 +50,14 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
       })
 
     return () => { cancelled = true }
-  }, [pageId, token, onPassed])
+  }, [pageId, token])
 
-  const answeredCount = Object.keys(answers).length
   const questionCount = test?.questions.length ?? 0
+  const answeredCount = Object.keys(answers).length
   const allAnswered = questionCount > 0 && answeredCount === questionCount
   const orderedQuestions = useMemo(() => test ? [...test.questions].sort((a, b) => a.position - b.position) : [], [test])
-  const submittedAnswers = result?.answers ?? []
-  const submittedByQuestion = useMemo(() => new Map(submittedAnswers.map((answer) => [answer.question_id, answer])), [submittedAnswers])
+  const submittedByQuestion = useMemo(() => new Map((result?.answers ?? []).map((answer) => [answer.question_id, answer])), [result])
+  const hasSubmittedAnswers = submittedByQuestion.size > 0
 
   const handleSubmit = async () => {
     if (!test || !allAnswered || submitting || locked) return
@@ -82,8 +82,6 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
   if (error && !test) return <div className="test-error"><div className="test-result-icon">!</div><h3>Не удалось загрузить тест</h3><p>{error}</p></div>
   if (!test || questionCount === 0) return <div className="test-error"><div className="test-result-icon">!</div><h3>В тесте пока нет вопросов</h3><p>Попробуй открыть эту страницу позже.</p></div>
 
-  const hasSubmittedAnswers = submittedAnswers.length > 0
-
   return <div className="test-container">
     <div className="test-meta">
       <span>Вопросов: {questionCount}</span>
@@ -102,29 +100,16 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
         const selectedAnswer = answers[question.id]
         const submitted = submittedByQuestion.get(question.id)
         const orderedAnswers = [...question.answers].sort((a, b) => a.position - b.position)
+
         return <section key={question.id} className="test-question">
           <div className="test-question-number">Вопрос {index + 1}</div>
           <h3>{question.question}</h3>
           <div className="test-answers">
             {orderedAnswers.map((answer) => {
               const isSelected = selectedAnswer === answer.id
-              const isSubmittedCorrect = submitted?.answer_id === answer.id && submitted.is_correct
-              const isSubmittedWrong = submitted?.answer_id === answer.id && !submitted.is_correct
-              const isCorrectAnswer = submitted && !submitted.is_correct && submittedByQuestion.get(question.id)?.answer_id !== answer.id
-                ? false
-                : false
-
-              let stateClass = ''
-              if (hasSubmittedAnswers) {
-                if (isSubmittedCorrect) stateClass = 'correct'
-                else if (isSubmittedWrong) stateClass = 'wrong'
-                else if (submitted && !submitted.is_correct) {
-                  const wasCorrect = orderedQuestions
-                    .find((item) => item.id === question.id)
-                    ?.answers.find((item) => item.id === answer.id)
-                  if (wasCorrect && answer.id !== submitted.answer_id) stateClass = 'correct'
-                }
-              }
+              const isCorrect = hasSubmittedAnswers && submitted?.correct_answer_id === answer.id
+              const isWrongSelected = hasSubmittedAnswers && isSelected && submitted?.is_correct === false
+              const stateClass = isCorrect ? 'correct' : isWrongSelected ? 'wrong' : ''
 
               return <label key={answer.id} className={`test-answer ${isSelected ? 'selected' : ''} ${stateClass} ${locked ? 'locked' : ''}`}>
                 <input type="radio" name={`question-${question.id}`} value={answer.id} checked={isSelected} disabled={locked || submitting} onChange={() => setAnswers((current) => ({ ...current, [question.id]: answer.id }))} />
