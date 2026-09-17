@@ -1,27 +1,13 @@
-CREATE TABLE courses (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    theme VARCHAR(255),
-    description TEXT,
-    price INTEGER NOT NULL DEFAULT 0,
-    image_id VARCHAR(255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+DROP TABLE IF EXISTS test_attempt_answers;
+DROP TABLE IF EXISTS test_attempts;
+DROP TABLE IF EXISTS page_progress;
+DROP TABLE IF EXISTS course_access;
+DROP TABLE IF EXISTS test_answers;
+DROP TABLE IF EXISTS test_questions;
+DROP TABLE IF EXISTS tests;
+DROP TABLE IF EXISTS course_pages;
+DROP TABLE IF EXISTS course_sections;
+DROP TABLE IF EXISTS courses;
 
-CREATE TABLE course_materials (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    position INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE course_access (
-    user_id BIGINT NOT NULL,
-    course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (user_id, course_id)
-);
+DROP TYPE IF EXISTS page_type;
+DROP TYPE IF EXISTS course_status;
