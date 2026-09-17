@@ -5,7 +5,7 @@ import './TestPage.css'
 type TestPageProps = {
   pageId: number
   token: string
-  onPassed: () => void
+  onPassed: () => void | Promise<void>
 }
 
 export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
@@ -24,15 +24,9 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
     setAnswers({})
 
     getTest(pageId, token)
-      .then((data) => {
-        if (!cancelled) setTest(data)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Не удалось загрузить тест')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+      .then((data) => { if (!cancelled) setTest(data) })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Не удалось загрузить тест') })
+      .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
   }, [pageId, token])
@@ -50,7 +44,13 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
       const submission = orderedQuestions.map((question) => ({ question_id: question.id, answer_id: answers[question.id] }))
       const data = await submitTest(test.id, submission, token)
       setResult(data)
-      if (data.passed) onPassed()
+      if (data.passed) {
+        try {
+          await onPassed()
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Тест пройден, но прогресс не удалось сохранить')
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось отправить тест')
     } finally {
@@ -59,9 +59,7 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
   }
 
   if (loading) return <div className="test-loading">Загружаем тест...</div>
-
   if (error && !test) return <div className="test-error"><div className="test-result-icon">!</div><h3>Не удалось загрузить тест</h3><p>{error}</p></div>
-
   if (!test || questionCount === 0) return <div className="test-error"><div className="test-result-icon">!</div><h3>В тесте пока нет вопросов</h3><p>Попробуй открыть эту страницу позже.</p></div>
 
   if (result) return <div className={`test-result ${result.passed ? 'passed' : 'failed'}`}>
@@ -70,6 +68,7 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
     <div className="test-score">{result.score}%</div>
     <h3>{result.passed ? 'Тест пройден' : 'Тест не пройден'}</h3>
     <p>Для прохождения нужно набрать не менее {result.passing_score}%.</p>
+    {error && <div className="form-error test-form-error">{error}</div>}
     {!result.passed && <button type="button" className="button button-primary" onClick={() => { setResult(null); setAnswers({}); setError('') }}>Попробовать снова</button>}
   </div>
 
