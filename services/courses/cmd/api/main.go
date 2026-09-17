@@ -31,6 +31,8 @@ func main() {
 	mux.HandleFunc("GET /api/users/me/courses", handler.GetEnrolled)
 	mux.HandleFunc("GET /api/courses/{id}/progress", handler.GetProgress)
 	mux.HandleFunc("POST /api/pages/{pageId}/complete", handler.CompletePage)
+	mux.HandleFunc("GET /api/pages/{pageId}/test", handler.GetTest)
+	mux.HandleFunc("POST /api/tests/{testId}/attempts", handler.SubmitTest)
 	server := &http.Server{Addr: ":8082", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	serverErrors := make(chan error, 1)
 	go func() { log.Println("Cringearium Courses started on :8082"); if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { serverErrors <- err } }()
