@@ -49,7 +49,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", gateway.health)
-	mux.Handle("/api/auth/", gateway.authProxy())
+	mux.Handle("POST /api/auth/register", gateway.authProxy())
+	mux.Handle("POST /api/auth/login", gateway.authProxy())
+	mux.Handle("GET /api/auth/me", gateway.authProxy())
 	mux.Handle("GET /api/courses", gateway.coursesProxy(false))
 	mux.Handle("GET /api/courses/{id}", gateway.coursesProxy(false))
 	mux.Handle("POST /api/courses/{id}/enroll", gateway.coursesProxy(true))
