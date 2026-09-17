@@ -12,8 +12,8 @@ func (db *DB) FindAll(ctx context.Context) ([]*domain.Course, error) {
 		SELECT
 			id,
 			title,
-			theme,
-			description,
+			COALESCE(theme, ''),
+			COALESCE(description, ''),
 			price,
 			image_id,
 			author_id,
@@ -67,8 +67,8 @@ func (db *DB) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, er
 		SELECT
 			id,
 			title,
-			theme,
-			description,
+			COALESCE(theme, ''),
+			COALESCE(description, ''),
 			price,
 			image_id,
 			author_id,
@@ -105,7 +105,7 @@ func (db *DB) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, er
 			id,
 			course_id,
 			title,
-			description,
+			COALESCE(description, ''),
 			position,
 			created_at,
 			updated_at
@@ -149,7 +149,7 @@ func (db *DB) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, er
 			section_id,
 			title,
 			type,
-			content,
+			COALESCE(content, ''),
 			position,
 			created_at,
 			updated_at
