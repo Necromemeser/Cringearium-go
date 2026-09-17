@@ -16,6 +16,7 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   let lastIndex = 0
   let match: RegExpExecArray | null
   let key = 0
+
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) result.push(text.slice(lastIndex, match.index))
     if (match[2] || match[3]) result.push(<strong key={key++}>{match[2] || match[3]}</strong>)
@@ -24,6 +25,7 @@ function renderInlineMarkdown(text: string): ReactNode[] {
     else if (match[8]) result.push(<em key={key++}>{match[8]}</em>)
     lastIndex = match.index + match[0].length
   }
+
   if (lastIndex < text.length) result.push(text.slice(lastIndex))
   return result
 }
@@ -34,21 +36,69 @@ function Markdown({ content }: { content: string }) {
   let paragraph: string[] = []
   let list: string[] = []
   let orderedList = false
-  const flushParagraph = () => { if (!paragraph.length) return; blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>); paragraph = [] }
-  const flushList = () => { if (!list.length) return; const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item)}</li>); blocks.push(orderedList ? <ol key={`ol-${blocks.length}`}>{items}</ol> : <ul key={`ul-${blocks.length}`}>{items}</ul>); list = [] }
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return
+    blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>)
+    paragraph = []
+  }
+
+  const flushList = () => {
+    if (!list.length) return
+    const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item)}</li>)
+    blocks.push(orderedList ? <ol key={`ol-${blocks.length}`}>{items}</ol> : <ul key={`ul-${blocks.length}`}>{items}</ul>)
+    list = []
+  }
+
   lines.forEach((line) => {
     const trimmed = line.trim()
-    if (!trimmed) { flushParagraph(); flushList(); return }
+    if (!trimmed) {
+      flushParagraph()
+      flushList()
+      return
+    }
+
     const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed)
-    if (heading) { flushParagraph(); flushList(); const level = Math.min(heading[1].length, 4); const text = renderInlineMarkdown(heading[2]); if (level === 1) blocks.push(<h3 key={`h-${blocks.length}`}>{text}</h3>); else if (level === 2) blocks.push(<h4 key={`h-${blocks.length}`}>{text}</h4>); else blocks.push(<h5 key={`h-${blocks.length}`}>{text}</h5>); return }
+    if (heading) {
+      flushParagraph()
+      flushList()
+      const level = Math.min(heading[1].length, 4)
+      const text = renderInlineMarkdown(heading[2])
+      if (level === 1) blocks.push(<h3 key={`h-${blocks.length}`}>{text}</h3>)
+      else if (level === 2) blocks.push(<h4 key={`h-${blocks.length}`}>{text}</h4>)
+      else blocks.push(<h5 key={`h-${blocks.length}`}>{text}</h5>)
+      return
+    }
+
     const unordered = /^[-*+]\s+(.+)$/.exec(trimmed)
     const ordered = /^\d+[.)]\s+(.+)$/.exec(trimmed)
-    if (unordered || ordered) { flushParagraph(); if (list.length && orderedList !== Boolean(ordered)) flushList(); orderedList = Boolean(ordered); list.push((unordered || ordered)![1]); return }
-    if (trimmed.startsWith('> ')) { flushParagraph(); flushList(); blocks.push(<blockquote key={`q-${blocks.length}`}>{renderInlineMarkdown(trimmed.slice(2))}</blockquote>); return }
-    if (/^---+$/.test(trimmed)) { flushParagraph(); flushList(); blocks.push(<hr key={`hr-${blocks.length}`} />); return }
+    if (unordered || ordered) {
+      flushParagraph()
+      if (list.length && orderedList !== Boolean(ordered)) flushList()
+      orderedList = Boolean(ordered)
+      list.push((unordered || ordered)![1])
+      return
+    }
+
+    if (trimmed.startsWith('> ')) {
+      flushParagraph()
+      flushList()
+      blocks.push(<blockquote key={`q-${blocks.length}`}>{renderInlineMarkdown(trimmed.slice(2))}</blockquote>)
+      return
+    }
+
+    if (/^---+$/.test(trimmed)) {
+      flushParagraph()
+      flushList()
+      blocks.push(<hr key={`hr-${blocks.length}`} />)
+      return
+    }
+
     paragraph.push(trimmed)
   })
-  flushParagraph(); flushList()
+
+  flushParagraph()
+  flushList()
   return <div className="markdown-content">{blocks.length ? blocks : <p>Материал этой страницы пока не добавлен.</p>}</div>
 }
 
@@ -66,7 +116,7 @@ function CoursePage({ courseId, user }: { courseId: number; user: User | null })
   const [error, setError] = useState('')
   const [enrolling, setEnrolling] = useState(false)
   const [enrolled, setEnrolled] = useState(false)
-  const [accessLoading, setAccessLoading] = useState(false)
+  const [accessLoading, setAccessLoading] = useState(true)
   const [progress, setProgress] = useState<number[]>([])
   const [selectedPage, setSelectedPage] = useState<number | null>(null)
   const [progressLoading, setProgressLoading] = useState(false)
@@ -93,6 +143,7 @@ function CoursePage({ courseId, user }: { courseId: number; user: User | null })
     catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось записаться на курс') }
     finally { setEnrolling(false) }
   }
+
   const markComplete = async (pageId: number) => {
     if (!user || !token) { navigate('/login'); return }
     setProgressLoading(true); setActionError('')
@@ -100,6 +151,7 @@ function CoursePage({ courseId, user }: { courseId: number; user: User | null })
     catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось сохранить прогресс') }
     finally { setProgressLoading(false) }
   }
+
   if (loading) return <main className="page"><div className="container"><div className="loading-screen">Загружаем курс...</div></div></main>
   if (error || !course) return <main className="page"><div className="container empty-page"><span className="eyebrow">ОШИБКА</span><h1>Не удалось открыть курс</h1><p>{error || 'Курс не найден.'}</p><Link href="/courses" className="button button-primary">Вернуться в каталог</Link></div></main>
 
@@ -120,3 +172,5 @@ function RegisterPage() { return <main className="auth-page"><div className="aut
 function ProfilePage({ user }: { user: User | null }) { const [courses, setCourses] = useState<Course[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const token = localStorage.getItem(TOKEN_KEY); useEffect(() => { if (!token) { setLoading(false); return } getEnrolledCourses(token).then(setCourses).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить мои курсы')).finally(() => setLoading(false)) }, [token]); if (!user) return <main className="page"><div className="container empty-page"><span className="eyebrow">ПРОФИЛЬ</span><h1>Войдите в аккаунт</h1><p>Здесь будут отображаться ваши курсы и прогресс.</p><Link href="/login" className="button button-primary">Войти</Link></div></main>; return <main className="page"><div className="container"><div className="page-heading"><span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span><h1>Профиль</h1></div><div className="profile-layout"><section className="profile-card profile-summary"><div className="avatar">{user.username.slice(0, 1).toUpperCase()}</div><div><h2>{user.username}</h2><p>{user.email}</p></div></section><section className="profile-card"><div className="card-heading"><span className="eyebrow">ОБУЧЕНИЕ</span><h2>Мои курсы</h2></div>{loading && <div className="loading-screen">Загружаем курсы...</div>}{error && <div className="form-error">{error}</div>}{!loading && !error && courses.length === 0 && <div className="empty-state"><div className="empty-icon">📚</div><h3>Пока нет курсов</h3><p>Запишись на курс из каталога, и он появится здесь.</p><Link href="/courses" className="button button-primary">Перейти в каталог</Link></div>}{!loading && !error && courses.length > 0 && <CourseGrid items={courses} />}</section></div></div></main> }
 function AboutPage() { return <main className="page"><div className="container narrow"><div className="page-heading"><span className="eyebrow">ПРОЕКТ</span><h1>О Cringearium</h1><p>Небольшая образовательная платформа для курсов, практики и персонализированного обучения.</p></div><section className="about-card"><h2>Зачем это всё?</h2><p>Cringearium создаётся как современная учебная платформа с понятной структурой курсов, практическими заданиями и персональной помощью.</p><div className="about-stats"><div><strong>Go</strong><span>Backend</span></div><div><strong>React</strong><span>Frontend</span></div><div><strong>AI</strong><span>Следующий этап</span></div></div></section></div></main> }
 function App() { const path = usePath(); const [user, setUser] = useState<User | null>(null); const [authLoading, setAuthLoading] = useState(true); useEffect(() => { const token = localStorage.getItem(TOKEN_KEY); if (!token) { setAuthLoading(false); return } getMe(token).then(setUser).catch(() => { localStorage.removeItem(TOKEN_KEY); setUser(null) }).finally(() => setAuthLoading(false)) }, []); const handleLogin = async (email: string, password: string) => { const token = await login(email, password); localStorage.setItem(TOKEN_KEY, token); const user = await getMe(token); setUser(user); navigate('/profile') }; const handleLogout = () => { localStorage.removeItem(TOKEN_KEY); setUser(null); navigate('/') }; if (authLoading) return <div className="loading-screen">Загружаем...</div>; let page: ReactNode; if (path === '/') page = <HomePage courses={[]} />; else if (path === '/courses') page = <CoursesPage />; else if (path === '/about') page = <AboutPage />; else if (path === '/login') page = <LoginPage onLogin={handleLogin} />; else if (path === '/register') page = <RegisterPage />; else if (path === '/profile') page = <ProfilePage user={user} />; else { const match = path.match(/^\/courses\/(\d+)$/); page = match ? <CoursePage courseId={Number(match[1])} user={user} /> : <main className="page"><div className="container empty-page"><h1>404</h1><p>Страница не найдена.</p><Link href="/" className="button button-primary">На главную</Link></div></main> } return <div className="app-shell"><Header user={user} onLogout={handleLogout} />{page}<Footer /></div> }
+
+export default App
