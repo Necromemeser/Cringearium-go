@@ -15,6 +15,21 @@ type MockCourseRepository struct {
 	recorder *MockCourseRepositoryMockRecorder
 }
 
+// CompletePage implements [ports.CourseRepository].
+func (m *MockCourseRepository) CompletePage(ctx context.Context, userID int64, pageID int64) error {
+	panic("unimplemented")
+}
+
+// FindEnrolled implements [ports.CourseRepository].
+func (m *MockCourseRepository) FindEnrolled(ctx context.Context, userID int64) ([]*domain.Course, error) {
+	panic("unimplemented")
+}
+
+// GetCompletedPages implements [ports.CourseRepository].
+func (m *MockCourseRepository) GetCompletedPages(ctx context.Context, userID int64, courseID int64) ([]int64, error) {
+	panic("unimplemented")
+}
+
 type MockCourseRepositoryMockRecorder struct {
 	mock *MockCourseRepository
 }
