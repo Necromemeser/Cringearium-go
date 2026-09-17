@@ -98,5 +98,14 @@ services:
       courses:
         condition: service_started
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+
 volumes:
   postgres_data:
