@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
 )
@@ -79,7 +80,7 @@ func (db *DB) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, er
 	`
 
 	if err := db.conn.GetContext(ctx, course, courseQuery, id); err != nil {
-		if err == sqlNoRows {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
