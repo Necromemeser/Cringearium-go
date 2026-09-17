@@ -30,10 +30,19 @@ type TestAttemptAnswer struct {
 	AnswerID   int64
 }
 
+type TestAttempt struct {
+	ID          int64
+	Score       int
+	Passed      bool
+	Answers     []TestAttemptAnswer
+	CompletedAt time.Time
+}
+
 type TestResult struct {
 	AttemptID    int64
 	Score        int
 	Passed       bool
 	PassingScore int
 	CompletedAt  time.Time
+	Answers      []TestAttemptAnswer
 }
