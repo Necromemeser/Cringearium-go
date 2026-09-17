@@ -26,52 +26,14 @@ export type Course = {
 }
 
 export type CourseDetails = Course & { sections: CourseSection[] }
+export type TestAnswer = { id: number; text: string; position: number }
+export type TestQuestion = { id: number; question: string; position: number; answers: TestAnswer[] }
+export type TestSubmissionAnswer = { question_id: number; answer_id: number }
+export type TestAttemptAnswer = TestSubmissionAnswer & { correct_answer_id: number; is_correct: boolean }
+export type CourseTest = { id: number; page_id: number; passing_score: number; questions: TestQuestion[]; completed: boolean; attempt_id?: number; score?: number; answers?: TestAttemptAnswer[] }
+export type TestResult = { attempt_id: number; score: number; passed: boolean; passing_score: number; answers: TestAttemptAnswer[] }
 
-export type TestAnswer = {
-  id: number
-  text: string
-  position: number
-}
-
-export type TestQuestion = {
-  id: number
-  question: string
-  position: number
-  answers: TestAnswer[]
-}
-
-export type TestSubmissionAnswer = {
-  question_id: number
-  answer_id: number
-}
-
-export type TestAttemptAnswer = TestSubmissionAnswer & {
-  is_correct: boolean
-}
-
-export type CourseTest = {
-  id: number
-  page_id: number
-  passing_score: number
-  questions: TestQuestion[]
-  completed: boolean
-  attempt_id?: number
-  score?: number
-  answers?: TestAttemptAnswer[]
-}
-
-export type TestResult = {
-  attempt_id: number
-  score: number
-  passed: boolean
-  passing_score: number
-  answers: TestAttemptAnswer[]
-}
-
-type CourseDetailsResponse = CourseDetails | {
-  course: Course
-  sections: CourseSection[]
-}
+type CourseDetailsResponse = CourseDetails | { course: Course; sections: CourseSection[] }
 
 async function parseError(response: Response, fallback: string): Promise<never> {
   const message = (await response.text()).trim()
@@ -122,11 +84,7 @@ export async function getTest(pageId: number, token: string): Promise<CourseTest
 }
 
 export async function submitTest(testId: number, answers: TestSubmissionAnswer[], token: string): Promise<TestResult> {
-  const response = await fetch(`/api/tests/${testId}/attempts`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ answers }),
-  })
+  const response = await fetch(`/api/tests/${testId}/attempts`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ answers }) })
   if (!response.ok) return parseError(response, 'Не удалось отправить тест')
   return (await response.json()) as TestResult
 }
