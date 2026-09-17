@@ -15,24 +15,7 @@ type MockCourseRepository struct {
 	recorder *MockCourseRepositoryMockRecorder
 }
 
-// CompletePage implements [ports.CourseRepository].
-func (m *MockCourseRepository) CompletePage(ctx context.Context, userID int64, pageID int64) error {
-	panic("unimplemented")
-}
-
-// FindEnrolled implements [ports.CourseRepository].
-func (m *MockCourseRepository) FindEnrolled(ctx context.Context, userID int64) ([]*domain.Course, error) {
-	panic("unimplemented")
-}
-
-// GetCompletedPages implements [ports.CourseRepository].
-func (m *MockCourseRepository) GetCompletedPages(ctx context.Context, userID int64, courseID int64) ([]int64, error) {
-	panic("unimplemented")
-}
-
-type MockCourseRepositoryMockRecorder struct {
-	mock *MockCourseRepository
-}
+type MockCourseRepositoryMockRecorder struct { mock *MockCourseRepository }
 
 func NewMockCourseRepository(ctrl *gomock.Controller) *MockCourseRepository {
 	mock := &MockCourseRepository{ctrl: ctrl}
@@ -40,57 +23,81 @@ func NewMockCourseRepository(ctrl *gomock.Controller) *MockCourseRepository {
 	return mock
 }
 
-func (m *MockCourseRepository) EXPECT() *MockCourseRepositoryMockRecorder {
-	return m.recorder
+func (m *MockCourseRepository) EXPECT() *MockCourseRepositoryMockRecorder { return m.recorder }
+
+func (m *MockCourseRepository) CompletePage(ctx context.Context, userID, pageID int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CompletePage", ctx, userID, pageID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+func (mr *MockCourseRepositoryMockRecorder) CompletePage(ctx, userID, pageID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompletePage", reflect.TypeOf((*MockCourseRepository)(nil).CompletePage), ctx, userID, pageID)
 }
 
 func (m *MockCourseRepository) FindAll(ctx context.Context) ([]*domain.Course, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindAll", ctx)
-	ret0, _ := ret[0].([]*domain.Course)
-	ret1, _ := ret[1].(error)
+	ret0, _ := ret[0].([]*domain.Course); ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
-
 func (mr *MockCourseRepositoryMockRecorder) FindAll(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockCourseRepository)(nil).FindAll), ctx)
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockCourseRepository)(nil).FindAll), ctx)
 }
 
 func (m *MockCourseRepository) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByID", ctx, id)
-	ret0, _ := ret[0].(*domain.CourseDetails)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindByID", ctx, id); ret0, _ := ret[0].(*domain.CourseDetails); ret1, _ := ret[1].(error); return ret0, ret1
+}
+func (mr *MockCourseRepositoryMockRecorder) FindByID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByID", reflect.TypeOf((*MockCourseRepository)(nil).FindByID), ctx, id)
 }
 
-func (mr *MockCourseRepositoryMockRecorder) FindByID(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByID", reflect.TypeOf((*MockCourseRepository)(nil).FindByID), ctx, id)
+func (m *MockCourseRepository) FindEnrolled(ctx context.Context, userID int64) ([]*domain.Course, error) {
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindEnrolled", ctx, userID); ret0, _ := ret[0].([]*domain.Course); ret1, _ := ret[1].(error); return ret0, ret1
+}
+func (mr *MockCourseRepositoryMockRecorder) FindEnrolled(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindEnrolled", reflect.TypeOf((*MockCourseRepository)(nil).FindEnrolled), ctx, userID)
+}
+
+func (m *MockCourseRepository) GetCompletedPages(ctx context.Context, userID, courseID int64) ([]int64, error) {
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "GetCompletedPages", ctx, userID, courseID); ret0, _ := ret[0].([]int64); ret1, _ := ret[1].(error); return ret0, ret1
+}
+func (mr *MockCourseRepositoryMockRecorder) GetCompletedPages(ctx, userID, courseID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCompletedPages", reflect.TypeOf((*MockCourseRepository)(nil).GetCompletedPages), ctx, userID, courseID)
 }
 
 func (m *MockCourseRepository) HasAccess(ctx context.Context, userID, courseID int64) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasAccess", ctx, userID, courseID)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "HasAccess", ctx, userID, courseID); ret0, _ := ret[0].(bool); ret1, _ := ret[1].(error); return ret0, ret1
 }
-
 func (mr *MockCourseRepositoryMockRecorder) HasAccess(ctx, userID, courseID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasAccess", reflect.TypeOf((*MockCourseRepository)(nil).HasAccess), ctx, userID, courseID)
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasAccess", reflect.TypeOf((*MockCourseRepository)(nil).HasAccess), ctx, userID, courseID)
 }
 
 func (m *MockCourseRepository) GrantAccess(ctx context.Context, userID, courseID int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GrantAccess", ctx, userID, courseID)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "GrantAccess", ctx, userID, courseID); ret0, _ := ret[0].(error); return ret0
+}
+func (mr *MockCourseRepositoryMockRecorder) GrantAccess(ctx, userID, courseID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantAccess", reflect.TypeOf((*MockCourseRepository)(nil).GrantAccess), ctx, userID, courseID)
 }
 
-func (mr *MockCourseRepositoryMockRecorder) GrantAccess(ctx, userID, courseID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantAccess", reflect.TypeOf((*MockCourseRepository)(nil).GrantAccess), ctx, userID, courseID)
+func (m *MockCourseRepository) FindTestByPageID(ctx context.Context, userID, pageID int64) (*domain.Test, error) {
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindTestByPageID", ctx, userID, pageID); ret0, _ := ret[0].(*domain.Test); ret1, _ := ret[1].(error); return ret0, ret1
+}
+func (mr *MockCourseRepositoryMockRecorder) FindTestByPageID(ctx, userID, pageID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindTestByPageID", reflect.TypeOf((*MockCourseRepository)(nil).FindTestByPageID), ctx, userID, pageID)
+}
+
+func (m *MockCourseRepository) FindTestByID(ctx context.Context, userID, testID int64) (*domain.Test, error) {
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindTestByID", ctx, userID, testID); ret0, _ := ret[0].(*domain.Test); ret1, _ := ret[1].(error); return ret0, ret1
+}
+func (mr *MockCourseRepositoryMockRecorder) FindTestByID(ctx, userID, testID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindTestByID", reflect.TypeOf((*MockCourseRepository)(nil).FindTestByID), ctx, userID, testID)
+}
+
+func (m *MockCourseRepository) SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer, score int, passed bool) (*domain.TestResult, error) {
+	m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "SubmitTest", ctx, userID, testID, answers, score, passed); ret0, _ := ret[0].(*domain.TestResult); ret1, _ := ret[1].(error); return ret0, ret1
+}
+func (mr *MockCourseRepositoryMockRecorder) SubmitTest(ctx, userID, testID, answers, score, passed any) *gomock.Call {
+	mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitTest", reflect.TypeOf((*MockCourseRepository)(nil).SubmitTest), ctx, userID, testID, answers, score, passed)
 }
