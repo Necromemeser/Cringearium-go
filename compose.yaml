@@ -23,8 +23,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_auth?sslmode=disable
       JWT_SECRET: ${JWT_SECRET}
       JWT_TTL: ${JWT_TTL}
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,8 +36,8 @@ services:
     container_name: cringearium-courses
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_courses?sslmode=disable
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,8 +49,8 @@ services:
     container_name: cringearium-payment
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_payment?sslmode=disable
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083"
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,8 +62,8 @@ services:
     container_name: cringearium-ai-chat
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_chat?sslmode=disable
-    ports:
-      - "8084:8084"
+    expose:
+      - "8084"
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,11 +75,28 @@ services:
     container_name: cringearium-ai-tests
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_tests?sslmode=disable
-    ports:
-      - "8085:8085"
+    expose:
+      - "8085"
     depends_on:
       postgres:
         condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: ./services/gateway/Dockerfile
+    container_name: cringearium-gateway
+    environment:
+      SERVER_ADDR: :8080
+      AUTH_URL: http://auth:8081
+      COURSES_URL: http://courses:8082
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth:
+        condition: service_started
+      courses:
+        condition: service_started
 
 volumes:
   postgres_data:
