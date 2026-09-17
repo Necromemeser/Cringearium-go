@@ -79,13 +79,15 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 
 	correctByQuestion := make(map[int64]int64, len(test.Questions))
 	questionIDs := make(map[int64]struct{}, len(test.Questions))
+	answerIDsByQuestion := make(map[int64]map[int64]struct{}, len(test.Questions))
 	for _, question := range test.Questions {
 		questionIDs[question.ID] = struct{}{}
+		answerIDsByQuestion[question.ID] = make(map[int64]struct{}, len(question.Answers))
 		for _, answer := range question.Answers {
-			if answer.IsCorrect {
-				correctByQuestion[question.ID] = answer.ID
-			}
+			answerIDsByQuestion[question.ID][answer.ID] = struct{}{}
+			if answer.IsCorrect { correctByQuestion[question.ID] = answer.ID }
 		}
+		if _, ok := correctByQuestion[question.ID]; !ok { return nil, ErrInvalidTestAnswers }
 	}
 
 	seen := make(map[int64]struct{}, len(answers))
@@ -93,6 +95,7 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 	for _, submitted := range answers {
 		if _, ok := questionIDs[submitted.QuestionID]; !ok { return nil, ErrInvalidTestAnswers }
 		if _, ok := seen[submitted.QuestionID]; ok { return nil, ErrInvalidTestAnswers }
+		if _, ok := answerIDsByQuestion[submitted.QuestionID][submitted.AnswerID]; !ok { return nil, ErrInvalidTestAnswers }
 		seen[submitted.QuestionID] = struct{}{}
 		if submitted.AnswerID == correctByQuestion[submitted.QuestionID] { correct++ }
 	}
@@ -100,5 +103,8 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 
 	score := correct * 100 / len(test.Questions)
 	passed := score >= test.PassingScore
-	return c.repository.SubmitTest(ctx, userID, testID, answers, score, passed)
+	result, err := c.repository.SubmitTest(ctx, userID, testID, answers, score, passed)
+	if err != nil { return nil, err }
+	result.PassingScore = test.PassingScore
+	return result, nil
 }
