@@ -19,14 +19,14 @@ func NewHandler(courses *application.Courses) *Handler {
 }
 
 type courseResponse struct {
-	ID          int64                  `json:"id"`
-	Title       string                 `json:"title"`
-	Theme       string                 `json:"theme,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Price       int                    `json:"price"`
-	ImageID     string                 `json:"image_id,omitempty"`
-	AuthorID    *int64                 `json:"author_id,omitempty"`
-	Status      domain.CourseStatus    `json:"status"`
+	ID          int64               `json:"id"`
+	Title       string              `json:"title"`
+	Theme       string              `json:"theme,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Price       int                 `json:"price"`
+	ImageID     string              `json:"image_id,omitempty"`
+	AuthorID    *int64              `json:"author_id,omitempty"`
+	Status      domain.CourseStatus `json:"status"`
 }
 
 type courseDetailsResponse struct {
@@ -191,7 +191,7 @@ func (h *Handler) GetAccess(w http.ResponseWriter, r *http.Request) {
 }
 
 func userIDFromHeader(r *http.Request) (int64, error) {
-	return strconv.ParseInt(r.Header.Get("X-User-ID"), 10, 64)
+	return strconv.ParseInt(r.Header.Get("X-Authenticated-User-ID"), 10, 64)
 }
 
 func toCourseResponse(course *domain.Course) courseResponse {
