@@ -145,8 +145,8 @@ func (g *Gateway) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		r.Header.Del("X-Authenticated-User-ID")
-		r.Header.Set("X-Authenticated-User-ID", strconv.FormatInt(user.ID, 10))
+		r.Header.Del("X-User-ID")
+		r.Header.Set("X-User-ID", strconv.FormatInt(user.ID, 10))
 		next.ServeHTTP(w, r)
 	})
 }
