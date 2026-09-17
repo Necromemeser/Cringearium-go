@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Necromemeser/Cringearium-go/services/courses/internal/application/mocks"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
+	"github.com/Necromemeser/Cringearium-go/services/courses/internal/mocks"
 	"go.uber.org/mock/gomock"
 )
 
@@ -87,11 +87,11 @@ func TestCoursesGetByIDRepositoryError(t *testing.T) {
 
 func TestCoursesEnroll(t *testing.T) {
 	tests := []struct {
-		name    string
-		course  *domain.CourseDetails
+		name      string
+		course    *domain.CourseDetails
 		hasAccess bool
-		setup   func(*mocks.MockCourseRepository)
-		wantErr error
+		setup     func(*mocks.MockCourseRepository)
+		wantErr   error
 	}{
 		{
 			name:   "course not found",

@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/application"
-	"github.com/Necromemeser/Cringearium-go/services/courses/internal/application/mocks"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
+	"github.com/Necromemeser/Cringearium-go/services/courses/internal/mocks"
 	"go.uber.org/mock/gomock"
 )
 
@@ -59,7 +59,7 @@ func TestHandlerGetByID(t *testing.T) {
 		Course: domain.Course{ID: 1, Title: "Math", Status: domain.CourseStatusPublished},
 		Sections: []domain.SectionDetails{{
 			Section: domain.Section{ID: 10, Title: "Equations", Position: 0},
-			Pages: []domain.Page{{ID: 100, Title: "Theory", Type: domain.PageTypeTheory, Position: 0, Content: "content"}},
+			Pages:   []domain.Page{{ID: 100, Title: "Theory", Type: domain.PageTypeTheory, Position: 0, Content: "content"}},
 		}},
 	}
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(course, nil)
