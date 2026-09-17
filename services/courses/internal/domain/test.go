@@ -26,9 +26,10 @@ type TestAnswer struct {
 }
 
 type TestAttemptAnswer struct {
-	QuestionID int64
-	AnswerID   int64
-	IsCorrect  bool
+	QuestionID     int64
+	AnswerID       int64
+	CorrectAnswerID int64
+	IsCorrect      bool
 }
 
 type TestAttempt struct {
