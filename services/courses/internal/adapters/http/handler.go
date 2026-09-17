@@ -19,14 +19,14 @@ func NewHandler(courses *application.Courses) *Handler {
 }
 
 type courseResponse struct {
-	ID          int64                  `json:"id"`
-	Title       string                 `json:"title"`
-	Theme       string                 `json:"theme,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Price       int                    `json:"price"`
-	ImageID     string                 `json:"image_id,omitempty"`
-	AuthorID    *int64                 `json:"author_id,omitempty"`
-	Status      domain.CourseStatus    `json:"status"`
+	ID          int64               `json:"id"`
+	Title       string              `json:"title"`
+	Theme       string              `json:"theme,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Price       int                 `json:"price"`
+	ImageID     string              `json:"image_id,omitempty"`
+	AuthorID    *int64              `json:"author_id,omitempty"`
+	Status      domain.CourseStatus `json:"status"`
 }
 
 type courseDetailsResponse struct {
