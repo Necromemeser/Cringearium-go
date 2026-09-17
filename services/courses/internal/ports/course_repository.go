@@ -15,5 +15,6 @@ type CourseRepository interface {
 	GetCompletedPages(ctx context.Context, userID, courseID int64) ([]int64, error)
 	CompletePage(ctx context.Context, userID, pageID int64) error
 	FindTestByPageID(ctx context.Context, userID, pageID int64) (*domain.Test, error)
+	FindTestByID(ctx context.Context, userID, testID int64) (*domain.Test, error)
 	SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer, score int, passed bool) (*domain.TestResult, error)
 }
