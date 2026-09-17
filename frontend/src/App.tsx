@@ -16,18 +16,14 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   let lastIndex = 0
   let match: RegExpExecArray | null
   let key = 0
-
   while ((match = pattern.exec(text)) !== null) {
     if (match.index > lastIndex) result.push(text.slice(lastIndex, match.index))
-
     if (match[2] || match[3]) result.push(<strong key={key++}>{match[2] || match[3]}</strong>)
     else if (match[4]) result.push(<code key={key++}>{match[4]}</code>)
     else if (match[5] && match[6]) result.push(<a key={key++} href={match[6]} target="_blank" rel="noreferrer">{match[5]}</a>)
     else if (match[8]) result.push(<em key={key++}>{match[8]}</em>)
-
     lastIndex = match.index + match[0].length
   }
-
   if (lastIndex < text.length) result.push(text.slice(lastIndex))
   return result
 }
@@ -38,70 +34,21 @@ function Markdown({ content }: { content: string }) {
   let paragraph: string[] = []
   let list: string[] = []
   let orderedList = false
-
-  const flushParagraph = () => {
-    if (!paragraph.length) return
-    blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>)
-    paragraph = []
-  }
-
-  const flushList = () => {
-    if (!list.length) return
-    const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item)}</li>)
-    blocks.push(orderedList ? <ol key={`ol-${blocks.length}`}>{items}</ol> : <ul key={`ul-${blocks.length}`}>{items}</ul>)
-    list = []
-  }
-
+  const flushParagraph = () => { if (!paragraph.length) return; blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>); paragraph = [] }
+  const flushList = () => { if (!list.length) return; const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item)}</li>); blocks.push(orderedList ? <ol key={`ol-${blocks.length}`}>{items}</ol> : <ul key={`ul-${blocks.length}`}>{items}</ul>); list = [] }
   lines.forEach((line) => {
     const trimmed = line.trim()
-    if (!trimmed) {
-      flushParagraph()
-      flushList()
-      return
-    }
-
+    if (!trimmed) { flushParagraph(); flushList(); return }
     const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed)
-    if (heading) {
-      flushParagraph()
-      flushList()
-      const level = Math.min(heading[1].length, 4)
-      const text = renderInlineMarkdown(heading[2])
-      if (level === 1) blocks.push(<h3 key={`h-${blocks.length}`}>{text}</h3>)
-      else if (level === 2) blocks.push(<h4 key={`h-${blocks.length}`}>{text}</h4>)
-      else blocks.push(<h5 key={`h-${blocks.length}`}>{text}</h5>)
-      return
-    }
-
+    if (heading) { flushParagraph(); flushList(); const level = Math.min(heading[1].length, 4); const text = renderInlineMarkdown(heading[2]); if (level === 1) blocks.push(<h3 key={`h-${blocks.length}`}>{text}</h3>); else if (level === 2) blocks.push(<h4 key={`h-${blocks.length}`}>{text}</h4>); else blocks.push(<h5 key={`h-${blocks.length}`}>{text}</h5>); return }
     const unordered = /^[-*+]\s+(.+)$/.exec(trimmed)
     const ordered = /^\d+[.)]\s+(.+)$/.exec(trimmed)
-    if (unordered || ordered) {
-      flushParagraph()
-      if (list.length && orderedList !== Boolean(ordered)) flushList()
-      orderedList = Boolean(ordered)
-      list.push((unordered || ordered)![1])
-      return
-    }
-
-    if (trimmed.startsWith('> ')) {
-      flushParagraph()
-      flushList()
-      blocks.push(<blockquote key={`q-${blocks.length}`}>{renderInlineMarkdown(trimmed.slice(2))}</blockquote>)
-      return
-    }
-
-    if (/^---+$/.test(trimmed)) {
-      flushParagraph()
-      flushList()
-      blocks.push(<hr key={`hr-${blocks.length}`} />)
-      return
-    }
-
+    if (unordered || ordered) { flushParagraph(); if (list.length && orderedList !== Boolean(ordered)) flushList(); orderedList = Boolean(ordered); list.push((unordered || ordered)![1]); return }
+    if (trimmed.startsWith('> ')) { flushParagraph(); flushList(); blocks.push(<blockquote key={`q-${blocks.length}`}>{renderInlineMarkdown(trimmed.slice(2))}</blockquote>); return }
+    if (/^---+$/.test(trimmed)) { flushParagraph(); flushList(); blocks.push(<hr key={`hr-${blocks.length}`} />); return }
     paragraph.push(trimmed)
   })
-
-  flushParagraph()
-  flushList()
-
+  flushParagraph(); flushList()
   return <div className="markdown-content">{blocks.length ? blocks : <p>Материал этой страницы пока не добавлен.</p>}</div>
 }
 
@@ -113,27 +60,63 @@ function HomePage({ courses }: { courses: Course[] }) { return <><section classN
 
 function CoursesPage() { const [courses, setCourses] = useState<Course[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [search, setSearch] = useState(''); const [query, setQuery] = useState(''); useEffect(() => { getCourses().then((data) => setCourses(data.filter((c) => c.status === 'published'))).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить курсы')).finally(() => setLoading(false)) }, []); const filtered = courses.filter((c) => { const q = query.trim().toLowerCase(); return !q || `${c.title} ${c.theme} ${c.description}`.toLowerCase().includes(q) }); return <main className="page"><div className="container"><div className="page-heading"><span className="eyebrow">ОБУЧЕНИЕ</span><h1>Каталог курсов</h1><p>Выбирай направление и двигайся вперёд в удобном темпе.</p></div><form className="catalog-toolbar" onSubmit={(e) => { e.preventDefault(); setQuery(search) }}><input aria-label="Поиск курсов" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по названию курса..." /><button type="submit">Найти</button></form>{loading && <div className="loading-screen">Загружаем курсы...</div>}{error && <div className="form-error">{error}</div>}{!loading && !error && filtered.length === 0 && <div className="empty-state"><div className="empty-icon">📚</div><h3>{query ? 'Ничего не найдено' : 'Курсов пока нет'}</h3><p>{query ? 'Попробуй изменить поисковый запрос.' : 'Опубликованные курсы появятся здесь.'}</p></div>}{!loading && !error && filtered.length > 0 && <CourseGrid items={filtered} />}</div></main> }
 
-function CoursePage({ courseId, user }: { courseId: number; user: User | null }) { const [course, setCourse] = useState<CourseDetails | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [enrolling, setEnrolling] = useState(false); const [enrolled, setEnrolled] = useState(false); const [progress, setProgress] = useState<number[]>([]); const [selectedPage, setSelectedPage] = useState<number | null>(null); const [progressLoading, setProgressLoading] = useState(false); const [actionError, setActionError] = useState('')
+function CoursePage({ courseId, user }: { courseId: number; user: User | null }) {
+  const [course, setCourse] = useState<CourseDetails | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrolled, setEnrolled] = useState(false)
+  const [accessLoading, setAccessLoading] = useState(false)
+  const [progress, setProgress] = useState<number[]>([])
+  const [selectedPage, setSelectedPage] = useState<number | null>(null)
+  const [progressLoading, setProgressLoading] = useState(false)
+  const [actionError, setActionError] = useState('')
   const token = localStorage.getItem(TOKEN_KEY)
+
   useEffect(() => { getCourse(courseId).then(setCourse).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить курс')).finally(() => setLoading(false)) }, [courseId])
-  useEffect(() => { if (!user || !token) return; getCourseProgress(courseId, token).then(setProgress).catch(() => setProgress([])) }, [courseId, user, token])
-  useEffect(() => { if (!course || selectedPage !== null) return; const first = course.sections.flatMap((s) => s.pages)[0]; if (first) setSelectedPage(first.id) }, [course, selectedPage])
-  const handleEnroll = async () => { if (!user || !token) { navigate('/login'); return }; setEnrolling(true); setActionError(''); try { await enrollCourse(courseId, token); setEnrolled(true) } catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось записаться на курс') } finally { setEnrolling(false) } }
-  const markComplete = async (pageId: number) => { if (!user || !token) { navigate('/login'); return }; setProgressLoading(true); setActionError(''); try { await completePage(pageId, token); setProgress((old) => old.includes(pageId) ? old : [...old, pageId]) } catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось сохранить прогресс') } finally { setProgressLoading(false) } }
+  useEffect(() => {
+    if (!user || !token) { setEnrolled(false); setProgress([]); setAccessLoading(false); return }
+    setAccessLoading(true)
+    fetch(`/api/courses/${courseId}/access`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => { if (!response.ok) throw new Error('Не удалось проверить доступ к курсу'); return response.json() as Promise<{ has_access: boolean }> })
+      .then((data) => setEnrolled(data.has_access))
+      .catch(() => setEnrolled(false))
+      .finally(() => setAccessLoading(false))
+  }, [courseId, user, token])
+  useEffect(() => { if (!user || !token || !enrolled) return; getCourseProgress(courseId, token).then(setProgress).catch(() => setProgress([])) }, [courseId, user, token, enrolled])
+  useEffect(() => { if (!course || !enrolled || selectedPage !== null) return; const first = course.sections.flatMap((s) => s.pages)[0]; if (first) setSelectedPage(first.id) }, [course, enrolled, selectedPage])
+
+  const handleEnroll = async () => {
+    if (!user || !token) { navigate('/login'); return }
+    setEnrolling(true); setActionError('')
+    try { await enrollCourse(courseId, token); setEnrolled(true) }
+    catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось записаться на курс') }
+    finally { setEnrolling(false) }
+  }
+  const markComplete = async (pageId: number) => {
+    if (!user || !token) { navigate('/login'); return }
+    setProgressLoading(true); setActionError('')
+    try { await completePage(pageId, token); setProgress((old) => old.includes(pageId) ? old : [...old, pageId]) }
+    catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось сохранить прогресс') }
+    finally { setProgressLoading(false) }
+  }
   if (loading) return <main className="page"><div className="container"><div className="loading-screen">Загружаем курс...</div></div></main>
   if (error || !course) return <main className="page"><div className="container empty-page"><span className="eyebrow">ОШИБКА</span><h1>Не удалось открыть курс</h1><p>{error || 'Курс не найден.'}</p><Link href="/courses" className="button button-primary">Вернуться в каталог</Link></div></main>
-  const pages = course.sections.flatMap((s) => s.pages); const currentPage = pages.find((p) => p.id === selectedPage) || pages[0]; const progressPercent = pages.length ? Math.round(progress.filter((id) => pages.some((p) => p.id === id)).length / pages.length * 100) : 0; const isFree = course.price === 0
-  return <main className="page"><div className="container"><div className="course-detail-hero"><div><span className="eyebrow">{course.theme || 'ОБУЧЕНИЕ'}</span><h1>{course.title}</h1><p>{course.description || 'Описание курса пока не добавлено.'}</p></div><div className="course-detail-action"><strong>{formatCoursePrice(course.price)}</strong>{enrolled ? <span className="enroll-success">✓ Ты записан на курс</span> : isFree ? user ? <button type="button" className="button button-primary" onClick={handleEnroll} disabled={enrolling}>{enrolling ? 'Записываем...' : 'Записаться на курс'}</button> : <Link href="/login" className="button button-primary">Войти и записаться</Link> : <span className="course-coming-soon">Оплата появится позже</span>}{actionError && <div className="form-error">{actionError}</div>}</div></div>
-    <section className="course-learning"><aside className="course-sidebar"><div className="course-progress"><span>Прогресс</span><strong>{progressPercent}%</strong><div className="progress-bar"><span style={{ width: `${progressPercent}%` }} /></div></div>{course.sections.map((section) => <div key={section.id} className="course-section"><div className="course-section-title"><span>{section.position + 1}</span><div><strong>{section.title}</strong>{section.description && <small>{section.description}</small>}</div></div><div className="course-page-list">{section.pages.map((page) => <button key={page.id} type="button" className={`course-page-button ${selectedPage === page.id ? 'active' : ''} ${progress.includes(page.id) ? 'completed' : ''}`} onClick={() => setSelectedPage(page.id)}><span className="page-status">{progress.includes(page.id) ? '✓' : page.type === 'test' ? '◉' : page.type === 'ai_test' ? '✦' : '○'}</span><span>{page.title}</span></button>)}</div></div>)}</aside><article className="lesson-panel">{currentPage ? <><div className="lesson-header"><span className="lesson-type">{currentPage.type === 'theory' ? 'ТЕОРИЯ' : currentPage.type === 'test' ? 'ТЕСТ' : 'AI-ТЕСТ'}</span><h2>{currentPage.title}</h2></div>{currentPage.type === 'theory' ? <div className="lesson-content"><Markdown content={currentPage.content || ''} /></div> : <div className="lesson-placeholder"><div className="placeholder-icon">{currentPage.type === 'test' ? '✓' : '✦'}</div><h3>{currentPage.type === 'test' ? 'Проверочный тест' : 'Персональный AI-тест'}</h3><p>{currentPage.type === 'test' ? 'Механика тестов будет подключена следующим этапом.' : 'AI-тест будет формироваться на основе твоего прогресса и результатов обучения.'}</p></div>}{progress.includes(currentPage.id) ? <div className="lesson-completed">✓ Страница завершена</div> : <button type="button" className="button button-primary lesson-complete" onClick={() => markComplete(currentPage.id)} disabled={progressLoading}>{progressLoading ? 'Сохраняем...' : 'Отметить как пройденное'}</button>}<div className="lesson-navigation"><button type="button" className="button button-secondary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index > 0) setSelectedPage(pages[index - 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) <= 0}>← Назад</button><button type="button" className="button button-primary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index < pages.length - 1) setSelectedPage(pages[index + 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) >= pages.length - 1}>Далее →</button></div></> : <div className="empty-state"><h3>В этом курсе пока нет страниц</h3></div>}</article></section></div></main> }
+
+  const pages = course.sections.flatMap((s) => s.pages)
+  const currentPage = pages.find((p) => p.id === selectedPage) || pages[0]
+  const progressPercent = pages.length ? Math.round(progress.filter((id) => pages.some((p) => p.id === id)).length / pages.length * 100) : 0
+  const isFree = course.price === 0
+
+  if (accessLoading) return <main className="page"><div className="container"><div className="loading-screen">Проверяем доступ к курсу...</div></div></main>
+
+  if (!enrolled) return <main className="page"><div className="container"><div className="course-detail-hero"><div><span className="eyebrow">{course.theme || 'ОБУЧЕНИЕ'}</span><h1>{course.title}</h1><p>{course.description || 'Описание курса пока не добавлено.'}</p></div><div className="course-detail-action"><strong>{formatCoursePrice(course.price)}</strong>{isFree ? user ? <button type="button" className="button button-primary" onClick={handleEnroll} disabled={enrolling}>{enrolling ? 'Записываем...' : 'Записаться на курс'}</button> : <Link href="/login" className="button button-primary">Войти и записаться</Link> : <span className="course-coming-soon">Оплата появится позже</span>}{actionError && <div className="form-error">{actionError}</div>}</div></div></div></main>
+
+  return <main className="page"><div className="container"><section className="course-learning"><aside className="course-sidebar"><div className="course-progress"><span>Прогресс</span><strong>{progressPercent}%</strong><div className="progress-bar"><span style={{ width: `${progressPercent}%` }} /></div></div>{course.sections.map((section) => <div key={section.id} className="course-section"><div className="course-section-title"><span>{section.position + 1}</span><div><strong>{section.title}</strong>{section.description && <small>{section.description}</small>}</div></div><div className="course-page-list">{section.pages.map((page) => <button key={page.id} type="button" className={`course-page-button ${selectedPage === page.id ? 'active' : ''} ${progress.includes(page.id) ? 'completed' : ''}`} onClick={() => setSelectedPage(page.id)}><span className="page-status">{progress.includes(page.id) ? '✓' : page.type === 'test' ? '◉' : page.type === 'ai_test' ? '✦' : '○'}</span><span>{page.title}</span></button>)}</div></div>)}</aside><article className="lesson-panel">{currentPage ? <><div className="lesson-header"><span className="lesson-type">{currentPage.type === 'theory' ? 'ТЕОРИЯ' : currentPage.type === 'test' ? 'ТЕСТ' : 'AI-ТЕСТ'}</span><h2>{currentPage.title}</h2></div>{currentPage.type === 'theory' ? <div className="lesson-content"><Markdown content={currentPage.content || ''} /></div> : <div className="lesson-placeholder"><div className="placeholder-icon">{currentPage.type === 'test' ? '✓' : '✦'}</div><h3>{currentPage.type === 'test' ? 'Проверочный тест' : 'Персональный AI-тест'}</h3><p>{currentPage.type === 'test' ? 'Механика тестов будет подключена следующим этапом.' : 'AI-тест будет формироваться на основе твоего прогресса и результатов обучения.'}</p></div>}{progress.includes(currentPage.id) ? <div className="lesson-completed">✓ Страница завершена</div> : <button type="button" className="button button-primary lesson-complete" onClick={() => markComplete(currentPage.id)} disabled={progressLoading}>{progressLoading ? 'Сохраняем...' : 'Отметить как пройденное'}</button>}<div className="lesson-navigation"><button type="button" className="button button-secondary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index > 0) setSelectedPage(pages[index - 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) <= 0}>← Назад</button><button type="button" className="button button-primary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index < pages.length - 1) setSelectedPage(pages[index + 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) >= pages.length - 1}>Далее →</button></div></> : <div className="empty-state"><h3>В этом курсе пока нет страниц</h3></div>}</article></section></div></main>
+}
 
 function LoginPage({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) { const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setError(''); setLoading(true); try { await onLogin(email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти') } finally { setLoading(false) } }; return <main className="auth-page"><div className="auth-card"><div className="auth-icon">◉</div><span className="eyebrow">С возвращением</span><h1>Вход в Cringearium</h1><p className="auth-description">Войди, чтобы продолжить обучение.</p><form onSubmit={submit} className="auth-form"><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required /></label><label>Пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required /></label>{error && <div className="form-error">{error}</div>}<button type="submit" className="button button-primary" disabled={loading}>{loading ? 'Входим...' : 'Войти'}</button></form><p className="auth-bottom">Нет аккаунта? <Link href="/register" className="text-link">Зарегистрироваться</Link></p></div></main> }
-
 function RegisterPage() { return <main className="auth-page"><div className="auth-card"><div className="auth-icon">✦</div><span className="eyebrow">НОВЫЙ АККАУНТ</span><h1>Регистрация</h1><p className="auth-description">Создай аккаунт и начни обучение.</p><div className="empty-state"><h3>Регистрация подключается</h3><p>Форма регистрации будет добавлена следующим этапом.</p></div></div></main> }
-
 function ProfilePage({ user }: { user: User | null }) { const [courses, setCourses] = useState<Course[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const token = localStorage.getItem(TOKEN_KEY); useEffect(() => { if (!token) { setLoading(false); return } getEnrolledCourses(token).then(setCourses).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить мои курсы')).finally(() => setLoading(false)) }, [token]); if (!user) return <main className="page"><div className="container empty-page"><span className="eyebrow">ПРОФИЛЬ</span><h1>Войдите в аккаунт</h1><p>Здесь будут отображаться ваши курсы и прогресс.</p><Link href="/login" className="button button-primary">Войти</Link></div></main>; return <main className="page"><div className="container"><div className="page-heading"><span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span><h1>Профиль</h1></div><div className="profile-layout"><section className="profile-card profile-summary"><div className="avatar">{user.username.slice(0, 1).toUpperCase()}</div><div><h2>{user.username}</h2><p>{user.email}</p></div></section><section className="profile-card"><div className="card-heading"><span className="eyebrow">ОБУЧЕНИЕ</span><h2>Мои курсы</h2></div>{loading && <div className="loading-screen">Загружаем курсы...</div>}{error && <div className="form-error">{error}</div>}{!loading && !error && courses.length === 0 && <div className="empty-state"><div className="empty-icon">📚</div><h3>Пока нет курсов</h3><p>Запишись на курс из каталога, и он появится здесь.</p><Link href="/courses" className="button button-primary">Перейти в каталог</Link></div>}{!loading && !error && courses.length > 0 && <CourseGrid items={courses} />}</section></div></div></main> }
-
 function AboutPage() { return <main className="page"><div className="container narrow"><div className="page-heading"><span className="eyebrow">ПРОЕКТ</span><h1>О Cringearium</h1><p>Небольшая образовательная платформа для курсов, практики и персонализированного обучения.</p></div><section className="about-card"><h2>Зачем это всё?</h2><p>Cringearium создаётся как современная учебная платформа с понятной структурой курсов, практическими заданиями и персональной помощью.</p><div className="about-stats"><div><strong>Go</strong><span>Backend</span></div><div><strong>React</strong><span>Frontend</span></div><div><strong>AI</strong><span>Следующий этап</span></div></div></section></div></main> }
-
 function App() { const path = usePath(); const [user, setUser] = useState<User | null>(null); const [authLoading, setAuthLoading] = useState(true); useEffect(() => { const token = localStorage.getItem(TOKEN_KEY); if (!token) { setAuthLoading(false); return } getMe(token).then(setUser).catch(() => { localStorage.removeItem(TOKEN_KEY); setUser(null) }).finally(() => setAuthLoading(false)) }, []); const handleLogin = async (email: string, password: string) => { const token = await login(email, password); localStorage.setItem(TOKEN_KEY, token); const user = await getMe(token); setUser(user); navigate('/profile') }; const handleLogout = () => { localStorage.removeItem(TOKEN_KEY); setUser(null); navigate('/') }; if (authLoading) return <div className="loading-screen">Загружаем...</div>; let page: ReactNode; if (path === '/') page = <HomePage courses={[]} />; else if (path === '/courses') page = <CoursesPage />; else if (path === '/about') page = <AboutPage />; else if (path === '/login') page = <LoginPage onLogin={handleLogin} />; else if (path === '/register') page = <RegisterPage />; else if (path === '/profile') page = <ProfilePage user={user} />; else { const match = path.match(/^\/courses\/(\d+)$/); page = match ? <CoursePage courseId={Number(match[1])} user={user} /> : <main className="page"><div className="container empty-page"><h1>404</h1><p>Страница не найдена.</p><Link href="/" className="button button-primary">На главную</Link></div></main> } return <div className="app-shell"><Header user={user} onLogout={handleLogout} />{page}<Footer /></div> }
-
-export default App
