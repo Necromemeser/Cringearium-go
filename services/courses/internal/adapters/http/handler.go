@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -27,7 +28,6 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	courses, err := h.courses.GetAll(r.Context()); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	response := make([]courseResponse, 0, len(courses)); for _, course := range courses { response = append(response, toCourseResponse(course)) }; writeJSON(w, http.StatusOK, response)
 }
-
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64); if err != nil || id <= 0 { http.Error(w, "invalid course id", http.StatusBadRequest); return }
 	course, err := h.courses.GetByID(r.Context(), id); if err != nil { if errors.Is(err, application.ErrCourseNotFound) { http.Error(w, "course not found", http.StatusNotFound); return }; http.Error(w, "internal server error", http.StatusInternalServerError); return }
@@ -36,27 +36,23 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	for _, section := range course.Sections { sr := sectionDetailsResponse{ID: section.Section.ID, Title: section.Section.Title, Description: section.Section.Description, Position: section.Section.Position, Pages: make([]pageResponse, 0, len(section.Pages))}; for _, page := range section.Pages { sr.Pages = append(sr.Pages, pageResponse{ID: page.ID, Title: page.Title, Type: page.Type, Content: page.Content, Position: page.Position}) }; response.Sections = append(response.Sections, sr) }
 	writeJSON(w, http.StatusOK, response)
 }
-
 func (h *Handler) Enroll(w http.ResponseWriter, r *http.Request) {
 	courseID, err := strconv.ParseInt(r.PathValue("id"), 10, 64); if err != nil || courseID <= 0 { http.Error(w, "invalid course id", http.StatusBadRequest); return }
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
 	if err = h.courses.Enroll(r.Context(), userID, courseID); err != nil { switch { case errors.Is(err, application.ErrCourseNotFound): http.Error(w, "course not found", http.StatusNotFound); case errors.Is(err, application.ErrCourseNotPublished): http.Error(w, "course is not published", http.StatusConflict); case errors.Is(err, application.ErrCourseNotFree): http.Error(w, "paid courses must be purchased", http.StatusConflict); case errors.Is(err, application.ErrAlreadyHasAccess): http.Error(w, "already enrolled", http.StatusConflict); default: http.Error(w, "internal server error", http.StatusInternalServerError) }; return }
 	w.WriteHeader(http.StatusCreated)
 }
-
 func (h *Handler) GetAccess(w http.ResponseWriter, r *http.Request) {
 	courseID, err := strconv.ParseInt(r.PathValue("id"), 10, 64); if err != nil || courseID <= 0 { http.Error(w, "invalid course id", http.StatusBadRequest); return }
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
 	hasAccess, err := h.courses.HasAccess(r.Context(), userID, courseID); if err != nil { if errors.Is(err, application.ErrCourseNotFound) { http.Error(w, "course not found", http.StatusNotFound); return }; http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	writeJSON(w, http.StatusOK, map[string]bool{"has_access": hasAccess})
 }
-
 func (h *Handler) GetEnrolled(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
-	courses, err := h.courses.FindEnrolled(ctxOrBackground(r), userID); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
+	courses, err := h.courses.FindEnrolled(r.Context(), userID); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	response := make([]courseResponse, 0, len(courses)); for _, course := range courses { response = append(response, toCourseResponse(course)) }; writeJSON(w, http.StatusOK, response)
 }
-
 func (h *Handler) GetProgress(w http.ResponseWriter, r *http.Request) {
 	courseID, err := strconv.ParseInt(r.PathValue("id"), 10, 64); if err != nil || courseID <= 0 { http.Error(w, "invalid course id", http.StatusBadRequest); return }
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
@@ -65,14 +61,12 @@ func (h *Handler) GetProgress(w http.ResponseWriter, r *http.Request) {
 	pageIDs, err := h.courses.GetCompletedPages(r.Context(), userID, courseID); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	writeJSON(w, http.StatusOK, map[string][]int64{"completed_page_ids": pageIDs})
 }
-
 func (h *Handler) CompletePage(w http.ResponseWriter, r *http.Request) {
 	pageID, err := strconv.ParseInt(r.PathValue("pageId"), 10, 64); if err != nil || pageID <= 0 { http.Error(w, "invalid page id", http.StatusBadRequest); return }
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
 	if err = h.courses.CompletePage(r.Context(), userID, pageID); err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	w.WriteHeader(http.StatusNoContent)
 }
-
 func (h *Handler) GetTest(w http.ResponseWriter, r *http.Request) {
 	pageID, err := strconv.ParseInt(r.PathValue("pageId"), 10, 64); if err != nil || pageID <= 0 { http.Error(w, "invalid page id", http.StatusBadRequest); return }
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
@@ -80,7 +74,6 @@ func (h *Handler) GetTest(w http.ResponseWriter, r *http.Request) {
 	if err != nil { if errors.Is(err, application.ErrTestNotFound) { http.Error(w, "test not found", http.StatusNotFound); return }; http.Error(w, "internal server error", http.StatusInternalServerError); return }
 	writeJSON(w, http.StatusOK, toTestResponse(test, attempt))
 }
-
 func (h *Handler) SubmitTest(w http.ResponseWriter, r *http.Request) {
 	testID, err := strconv.ParseInt(r.PathValue("testId"), 10, 64); if err != nil || testID <= 0 { http.Error(w, "invalid test id", http.StatusBadRequest); return }
 	userID, err := userIDFromHeader(r); if err != nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
@@ -90,7 +83,6 @@ func (h *Handler) SubmitTest(w http.ResponseWriter, r *http.Request) {
 	if err != nil { switch { case errors.Is(err, application.ErrTestNotFound): http.Error(w, "test not found", http.StatusNotFound); case errors.Is(err, application.ErrTestAlreadyPassed): http.Error(w, "test already passed", http.StatusConflict); case errors.Is(err, application.ErrInvalidTestAnswers): http.Error(w, "invalid test answers", http.StatusBadRequest); default: http.Error(w, "internal server error", http.StatusInternalServerError) }; return }
 	writeJSON(w, http.StatusOK, map[string]any{"attempt_id": result.AttemptID, "score": result.Score, "passed": result.Passed, "passing_score": result.PassingScore, "answers": toAttemptAnswerResponses(result.Answers, nil)})
 }
-
 func userIDFromHeader(r *http.Request) (int64, error) { return strconv.ParseInt(r.Header.Get("X-User-ID"), 10, 64) }
 func toCourseResponse(course *domain.Course) courseResponse { response := courseResponse{ID: course.ID, Title: course.Title, Theme: course.Theme, Description: course.Description, Price: course.Price, AuthorID: course.AuthorID, Status: course.Status}; if course.ImageID != nil { response.ImageID = *course.ImageID }; return response }
 func toTestResponse(test *domain.Test, attempt *domain.TestAttempt) testResponse {
