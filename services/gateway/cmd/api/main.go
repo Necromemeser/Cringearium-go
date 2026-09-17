@@ -159,7 +159,6 @@ func (g *Gateway) reverseProxy(target *url.URL, stripAuth bool) http.Handler {
 		if stripAuth {
 			r.Header.Del("Authorization")
 		}
-		r.Header.Del("X-User-ID")
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		g.log.Error("upstream request failed", "path", r.URL.Path, "error", err)
