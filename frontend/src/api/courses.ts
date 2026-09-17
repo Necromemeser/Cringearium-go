@@ -27,6 +27,11 @@ export type Course = {
 
 export type CourseDetails = Course & { sections: CourseSection[] }
 
+type CourseDetailsResponse = CourseDetails | {
+  course: Course
+  sections: CourseSection[]
+}
+
 async function parseError(response: Response, fallback: string): Promise<never> {
   const message = (await response.text()).trim()
   throw new Error(message || fallback)
@@ -41,7 +46,13 @@ export async function getCourses(): Promise<Course[]> {
 export async function getCourse(id: number): Promise<CourseDetails> {
   const response = await fetch(`/api/courses/${id}`)
   if (!response.ok) return parseError(response, 'Не удалось загрузить курс')
-  return (await response.json()) as CourseDetails
+
+  const data = (await response.json()) as CourseDetailsResponse
+  if ('course' in data) {
+    return { ...data.course, sections: data.sections ?? [] }
+  }
+
+  return { ...data, sections: data.sections ?? [] }
 }
 
 export async function getEnrolledCourses(token: string): Promise<Course[]> {
@@ -59,7 +70,7 @@ export async function getCourseProgress(id: number, token: string): Promise<numb
   const response = await fetch(`/api/courses/${id}/progress`, { headers: { Authorization: `Bearer ${token}` } })
   if (!response.ok) return parseError(response, 'Не удалось загрузить прогресс курса')
   const data = (await response.json()) as { completed_page_ids: number[] }
-  return data.completed_page_ids
+  return data.completed_page_ids ?? []
 }
 
 export async function completePage(id: number, token: string): Promise<void> {
