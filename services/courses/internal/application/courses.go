@@ -16,6 +16,7 @@ var (
 	ErrPageNotFound = errors.New("page not found")
 	ErrPageNotInCourse = errors.New("page does not belong to course")
 	ErrTestNotFound = errors.New("test not found")
+	ErrTestAlreadyPassed = errors.New("test already passed")
 	ErrInvalidTestAnswers = errors.New("invalid test answers")
 )
 
@@ -62,11 +63,13 @@ func (c *Courses) CompletePage(ctx context.Context, userID, pageID int64) error 
 	return c.repository.CompletePage(ctx, userID, pageID)
 }
 
-func (c *Courses) GetTest(ctx context.Context, userID, pageID int64) (*domain.Test, error) {
+func (c *Courses) GetTest(ctx context.Context, userID, pageID int64) (*domain.Test, *domain.TestAttempt, error) {
 	test, err := c.repository.FindTestByPageID(ctx, userID, pageID)
-	if err != nil { return nil, err }
-	if test == nil { return nil, ErrTestNotFound }
-	return test, nil
+	if err != nil { return nil, nil, err }
+	if test == nil { return nil, nil, ErrTestNotFound }
+	attempt, err := c.repository.FindLatestTestAttempt(ctx, userID, test.ID)
+	if err != nil { return nil, nil, err }
+	return test, attempt, nil
 }
 
 func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer) (*domain.TestResult, error) {
@@ -75,6 +78,11 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 	test, err := c.repository.FindTestByID(ctx, userID, testID)
 	if err != nil { return nil, err }
 	if test == nil { return nil, ErrTestNotFound }
+
+	attempt, err := c.repository.FindLatestTestAttempt(ctx, userID, testID)
+	if err != nil { return nil, err }
+	if attempt != nil && attempt.Passed { return nil, ErrTestAlreadyPassed }
+
 	if len(test.Questions) == 0 || len(answers) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
 
 	correctByQuestion := make(map[int64]int64, len(test.Questions))
@@ -105,6 +113,7 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 	passed := score >= test.PassingScore
 	result, err := c.repository.SubmitTest(ctx, userID, testID, answers, score, passed)
 	if err != nil { return nil, err }
+	if result == nil { return nil, errors.New("test result is nil") }
 	result.PassingScore = test.PassingScore
 	return result, nil
 }
