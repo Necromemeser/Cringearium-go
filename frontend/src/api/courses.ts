@@ -117,7 +117,7 @@ export async function getTest(pageId: number, token: string): Promise<CourseTest
 }
 
 export async function submitTest(testId: number, answers: TestSubmissionAnswer[], token: string): Promise<TestResult> {
-  const response = await fetch(`/api/tests/${testId}/submit`, {
+  const response = await fetch(`/api/tests/${testId}/attempts`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
