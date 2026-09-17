@@ -25,9 +25,7 @@ export type Course = {
   status: 'draft' | 'published' | 'archived'
 }
 
-export type CourseDetails = Course & {
-  sections: CourseSection[]
-}
+export type CourseDetails = Course & { sections: CourseSection[] }
 
 async function parseError(response: Response, fallback: string): Promise<never> {
   const message = (await response.text()).trim()
@@ -36,39 +34,40 @@ async function parseError(response: Response, fallback: string): Promise<never> 
 
 export async function getCourses(): Promise<Course[]> {
   const response = await fetch('/api/courses')
-
-  if (!response.ok) {
-    return parseError(response, 'Не удалось загрузить курсы')
-  }
-
+  if (!response.ok) return parseError(response, 'Не удалось загрузить курсы')
   return (await response.json()) as Course[]
 }
 
 export async function getCourse(id: number): Promise<CourseDetails> {
   const response = await fetch(`/api/courses/${id}`)
-
-  if (!response.ok) {
-    return parseError(response, 'Не удалось загрузить курс')
-  }
-
+  if (!response.ok) return parseError(response, 'Не удалось загрузить курс')
   return (await response.json()) as CourseDetails
 }
 
-export async function enrollCourse(id: number, token: string): Promise<void> {
-  const response = await fetch(`/api/courses/${id}/enroll`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  })
+export async function getEnrolledCourses(token: string): Promise<Course[]> {
+  const response = await fetch('/api/users/me/courses', { headers: { Authorization: `Bearer ${token}` } })
+  if (!response.ok) return parseError(response, 'Не удалось загрузить мои курсы')
+  return (await response.json()) as Course[]
+}
 
-  if (!response.ok) {
-    return parseError(response, 'Не удалось записаться на курс')
-  }
+export async function enrollCourse(id: number, token: string): Promise<void> {
+  const response = await fetch(`/api/courses/${id}/enroll`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+  if (!response.ok) return parseError(response, 'Не удалось записаться на курс')
+}
+
+export async function getCourseProgress(id: number, token: string): Promise<number[]> {
+  const response = await fetch(`/api/courses/${id}/progress`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!response.ok) return parseError(response, 'Не удалось загрузить прогресс курса')
+  const data = (await response.json()) as { completed_page_ids: number[] }
+  return data.completed_page_ids
+}
+
+export async function completePage(id: number, token: string): Promise<void> {
+  const response = await fetch(`/api/pages/${id}/complete`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+  if (!response.ok) return parseError(response, 'Не удалось сохранить прогресс')
 }
 
 export function formatCoursePrice(price: number): string {
-  if (price === 0) {
-    return 'Бесплатно'
-  }
-
+  if (price === 0) return 'Бесплатно'
   return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
 }
