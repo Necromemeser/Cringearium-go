@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getTest, submitTest, type CourseTest, type TestResult } from '../api/courses'
+import { completePage, getTest, submitTest, type CourseTest, type TestResult } from '../api/courses'
 import './TestPage.css'
 
 type TestPageProps = {
   pageId: number
   token: string
-  onPassed: () => void | Promise<void>
+  onPassed: () => void
 }
 
 export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
@@ -46,7 +46,8 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
       setResult(data)
       if (data.passed) {
         try {
-          await onPassed()
+          await completePage(pageId, token)
+          onPassed()
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Тест пройден, но прогресс не удалось сохранить')
         }
