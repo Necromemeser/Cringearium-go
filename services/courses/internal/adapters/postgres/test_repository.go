@@ -34,6 +34,38 @@ func (db *DB) FindTestByID(ctx context.Context, userID, testID int64) (*domain.T
 	return db.findTest(ctx, query, userID, testID)
 }
 
+func (db *DB) FindLatestTestAttempt(ctx context.Context, userID, testID int64) (*domain.TestAttempt, error) {
+	const attemptQuery = `
+		SELECT id, score, passed, completed_at
+		FROM test_attempts
+		WHERE user_id = $1 AND test_id = $2
+		ORDER BY completed_at DESC NULLS LAST, id DESC
+		LIMIT 1
+	`
+	attempt := new(domain.TestAttempt)
+	if err := db.conn.QueryRowxContext(ctx, attemptQuery, userID, testID).Scan(&attempt.ID, &attempt.Score, &attempt.Passed, &attempt.CompletedAt); err != nil {
+		if err == sql.ErrNoRows { return nil, nil }
+		return nil, err
+	}
+
+	const answersQuery = `
+		SELECT question_id, answer_id
+		FROM test_attempt_answers
+		WHERE attempt_id = $1
+		ORDER BY question_id
+	`
+	rows, err := db.conn.QueryxContext(ctx, answersQuery, attempt.ID)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	for rows.Next() {
+		answer := domain.TestAttemptAnswer{}
+		if err := rows.Scan(&answer.QuestionID, &answer.AnswerID); err != nil { return nil, err }
+		attempt.Answers = append(attempt.Answers, answer)
+	}
+	if err := rows.Err(); err != nil { return nil, err }
+	return attempt, nil
+}
+
 func (db *DB) findTest(ctx context.Context, query string, args ...any) (*domain.Test, error) {
 	test := new(domain.Test)
 	if err := db.conn.QueryRowxContext(ctx, query, args...).Scan(&test.ID, &test.PageID, &test.PassingScore); err != nil {
@@ -122,5 +154,5 @@ func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []do
 	}
 
 	if err := tx.Commit(); err != nil { return nil, err }
-	return &domain.TestResult{AttemptID: attemptID, Score: score, Passed: passed, CompletedAt: completedAt}, nil
+	return &domain.TestResult{AttemptID: attemptID, Score: score, Passed: passed, CompletedAt: completedAt, Answers: answers}, nil
 }
