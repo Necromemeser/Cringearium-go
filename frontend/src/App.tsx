@@ -101,54 +101,579 @@ function CoursePage({ courseId, user }: { courseId: number; user: User | null })
   const [selectedPage, setSelectedPage] = useState<number | null>(null)
   const [progressLoading, setProgressLoading] = useState(false)
   const [actionError, setActionError] = useState('')
+
   const token = localStorage.getItem(TOKEN_KEY)
 
-  useEffect(() => { getCourse(courseId).then(setCourse).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить курс')).finally(() => setLoading(false)) }, [courseId])
   useEffect(() => {
-    if (!user || !token) { setEnrolled(false); setProgress([]); setAccessLoading(false); return }
+    getCourse(courseId)
+      .then(setCourse)
+      .catch((e) =>
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Не удалось загрузить курс',
+        ),
+      )
+      .finally(() => setLoading(false))
+  }, [courseId])
+
+  useEffect(() => {
+    if (!user || !token) {
+      setEnrolled(false)
+      setProgress([])
+      setAccessLoading(false)
+      return
+    }
+
     setAccessLoading(true)
-    fetch(`/api/courses/${courseId}/access`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (response) => { if (!response.ok) throw new Error('Не удалось проверить доступ к курсу'); return response.json() as Promise<{ has_access: boolean }> })
+
+    fetch(`/api/courses/${courseId}/access`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Не удалось проверить доступ к курсу')
+        }
+
+        return response.json() as Promise<{
+          has_access: boolean
+        }>
+      })
       .then((data) => setEnrolled(data.has_access))
       .catch(() => setEnrolled(false))
       .finally(() => setAccessLoading(false))
   }, [courseId, user, token])
-  useEffect(() => { if (!user || !token || !enrolled) return; getCourseProgress(courseId, token).then(setProgress).catch(() => setProgress([])) }, [courseId, user, token, enrolled])
-  useEffect(() => { if (!course || !enrolled || selectedPage !== null) return; const first = course.sections.flatMap((s) => s.pages)[0]; if (first) setSelectedPage(first.id) }, [course, enrolled, selectedPage])
+
+  useEffect(() => {
+    if (!user || !token || !enrolled) {
+      return
+    }
+
+    getCourseProgress(courseId, token)
+      .then(setProgress)
+      .catch(() => setProgress([]))
+  }, [courseId, user, token, enrolled])
 
   const handleEnroll = async () => {
-    if (!user || !token) { navigate('/login'); return }
-    setEnrolling(true); setActionError('')
-    try { await enrollCourse(courseId, token); setEnrolled(true) }
-    catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось записаться на курс') }
-    finally { setEnrolling(false) }
+    if (!user || !token) {
+      navigate('/login')
+      return
+    }
+
+    setEnrolling(true)
+    setActionError('')
+
+    try {
+      await enrollCourse(courseId, token)
+      setEnrolled(true)
+    } catch (e) {
+      setActionError(
+        e instanceof Error
+          ? e.message
+          : 'Не удалось записаться на курс',
+      )
+    } finally {
+      setEnrolling(false)
+    }
   }
 
   const markComplete = async (pageId: number) => {
-    if (!user || !token) { navigate('/login'); return }
-    setProgressLoading(true); setActionError('')
-    try { await completePage(pageId, token); setProgress((old) => old.includes(pageId) ? old : [...old, pageId]) }
-    catch (e) { setActionError(e instanceof Error ? e.message : 'Не удалось сохранить прогресс') }
-    finally { setProgressLoading(false) }
+    if (!user || !token) {
+      navigate('/login')
+      return
+    }
+
+    if (progress.includes(pageId)) {
+      return
+    }
+
+    setProgressLoading(true)
+    setActionError('')
+
+    try {
+      await completePage(pageId, token)
+
+      setProgress((old) =>
+        old.includes(pageId)
+          ? old
+          : [...old, pageId],
+      )
+    } catch (e) {
+      setActionError(
+        e instanceof Error
+          ? e.message
+          : 'Не удалось сохранить прогресс',
+      )
+    } finally {
+      setProgressLoading(false)
+    }
+  }
+
+  const handlePageSelect = (pageId: number) => {
+    setSelectedPage(pageId)
   }
 
   const handleTestPassed = (pageId: number) => {
-    setProgress((old) => old.includes(pageId) ? old : [...old, pageId])
+    setProgress((old) =>
+      old.includes(pageId)
+        ? old
+        : [...old, pageId],
+    )
   }
 
-  if (loading) return <main className="page"><div className="container"><div className="loading-screen">Загружаем курс...</div></div></main>
-  if (error || !course) return <main className="page"><div className="container empty-page"><span className="eyebrow">ОШИБКА</span><h1>Не удалось открыть курс</h1><p>{error || 'Курс не найден.'}</p><Link href="/courses" className="button button-primary">Вернуться в каталог</Link></div></main>
+  useEffect(() => {
+    if (!course || !enrolled || selectedPage !== null) {
+      return
+    }
 
-  const pages = course.sections.flatMap((s) => s.pages)
-  const currentPage = pages.find((p) => p.id === selectedPage) || pages[0]
-  const progressPercent = pages.length ? Math.round(progress.filter((id) => pages.some((p) => p.id === id)).length / pages.length * 100) : 0
+    const firstPage = course.sections
+      .flatMap((section) => section.pages)[0]
+
+    if (firstPage) {
+      setSelectedPage(firstPage.id)
+    }
+  }, [course, enrolled, selectedPage])
+
+  useEffect(() => {
+    if (!course || !enrolled || selectedPage === null) {
+      return
+    }
+
+    const page = course.sections
+      .flatMap((section) => section.pages)
+      .find((page) => page.id === selectedPage)
+
+    if (!page || page.type !== 'theory') {
+      return
+    }
+
+    if (progress.includes(page.id)) {
+      return
+    }
+
+    void markComplete(page.id)
+  }, [course, enrolled, selectedPage, progress])
+
+  if (loading) {
+    return (
+      <main className="page">
+        <div className="container">
+          <div className="loading-screen">
+            Загружаем курс...
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (error || !course) {
+    return (
+      <main className="page">
+        <div className="container empty-page">
+          <span className="eyebrow">ОШИБКА</span>
+
+          <h1>Не удалось открыть курс</h1>
+
+          <p>{error || 'Курс не найден.'}</p>
+
+          <Link
+            href="/courses"
+            className="button button-primary"
+          >
+            Вернуться в каталог
+          </Link>
+        </div>
+      </main>
+    )
+  }
+
+  const pages = course.sections.flatMap(
+    (section) => section.pages,
+  )
+
+  const currentPage =
+    pages.find((page) => page.id === selectedPage) ||
+    pages[0]
+
+  const progressPercent = pages.length
+    ? Math.round(
+        (progress.filter((id) =>
+          pages.some((page) => page.id === id),
+        ).length /
+          pages.length) *
+          100,
+      )
+    : 0
+
   const isFree = course.price === 0
 
-  if (accessLoading) return <main className="page"><div className="container"><div className="loading-screen">Проверяем доступ к курсу...</div></div></main>
+  if (accessLoading) {
+    return (
+      <main className="page">
+        <div className="container">
+          <div className="loading-screen">
+            Проверяем доступ к курсу...
+          </div>
+        </div>
+      </main>
+    )
+  }
 
-  if (!enrolled) return <main className="page"><div className="container"><div className="course-detail-hero"><div><span className="eyebrow">{course.theme || 'ОБУЧЕНИЕ'}</span><h1>{course.title}</h1><p>{course.description || 'Описание курса пока не добавлено.'}</p></div><div className="course-detail-action"><strong>{formatCoursePrice(course.price)}</strong>{isFree ? user ? <button type="button" className="button button-primary" onClick={handleEnroll} disabled={enrolling}>{enrolling ? 'Записываем...' : 'Записаться на курс'}</button> : <Link href="/login" className="button button-primary">Войти и записаться</Link> : <span className="course-coming-soon">Оплата появится позже</span>}{actionError && <div className="form-error">{actionError}</div>}</div></div></div></main>
+  if (!enrolled) {
+    return (
+      <main className="page">
+        <div className="container">
+          <div className="course-detail-hero">
+            <div>
+              <span className="eyebrow">
+                {course.theme || 'ОБУЧЕНИЕ'}
+              </span>
 
-  return <main className="page"><div className="container"><section className="course-learning"><aside className="course-sidebar"><div className="course-progress"><span>Прогресс</span><strong>{progressPercent}%</strong><div className="progress-bar"><span style={{ width: `${progressPercent}%` }} /></div></div>{course.sections.map((section) => <div key={section.id} className="course-section"><div className="course-section-title"><span>{section.position + 1}</span><div><strong>{section.title}</strong>{section.description && <small>{section.description}</small>}</div></div><div className="course-page-list">{section.pages.map((page) => <button key={page.id} type="button" className={`course-page-button ${selectedPage === page.id ? 'active' : ''} ${progress.includes(page.id) ? 'completed' : ''}`} onClick={() => setSelectedPage(page.id)}><span className="page-status">{progress.includes(page.id) ? '✓' : page.type === 'test' ? '◉' : page.type === 'ai_test' ? '✦' : '○'}</span><span>{page.title}</span></button>)}</div></div>)}</aside><article className="lesson-panel">{currentPage ? <><div className="lesson-header"><span className="lesson-type">{currentPage.type === 'theory' ? 'ТЕОРИЯ' : currentPage.type === 'test' ? 'ТЕСТ' : 'AI-ТЕСТ'}</span><h2>{currentPage.title}</h2></div>{currentPage.type === 'theory' ? <div className="lesson-content"><Markdown content={currentPage.content || ''} /></div> : currentPage.type === 'test' ? <TestPage pageId={currentPage.id} token={token || ''} onPassed={() => handleTestPassed(currentPage.id)} /> : <div className="lesson-placeholder"><div className="placeholder-icon">✦</div><h3>Персональный AI-тест</h3><p>AI-тест будет формироваться на основе твоего прогресса и результатов обучения.</p></div>}{currentPage.type === 'test' ? null : progress.includes(currentPage.id) ? <div className="lesson-completed">✓ Страница завершена</div> : <button type="button" className="button button-primary lesson-complete" onClick={() => markComplete(currentPage.id)} disabled={progressLoading}>{progressLoading ? 'Сохраняем...' : 'Отметить как пройденное'}</button>}{currentPage.type !== 'test' && <div className="lesson-navigation"><button type="button" className="button button-secondary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index > 0) setSelectedPage(pages[index - 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) <= 0}>← Назад</button><button type="button" className="button button-primary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index < pages.length - 1) setSelectedPage(pages[index + 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) >= pages.length - 1}>Далее →</button></div>}{currentPage.type === 'test' && <div className="lesson-navigation"><button type="button" className="button button-secondary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index > 0) setSelectedPage(pages[index - 1].id) }} disabled={pages.findIndex((p) => p.id === currentPage.id) <= 0}>← Назад</button><button type="button" className="button button-primary" onClick={() => { const index = pages.findIndex((p) => p.id === currentPage.id); if (index < pages.length - 1 && progress.includes(currentPage.id)) setSelectedPage(pages[index + 1].id) }} disabled={!progress.includes(currentPage.id) || pages.findIndex((p) => p.id === currentPage.id) >= pages.length - 1}>Далее →</button></div>}</> : <div className="empty-state"><h3>В этом курсе пока нет страниц</h3></div>}</article></section></div></main>
+              <h1>{course.title}</h1>
+
+              <p>
+                {course.description ||
+                  'Описание курса пока не добавлено.'}
+              </p>
+            </div>
+
+            <div className="course-detail-action">
+              <strong>
+                {formatCoursePrice(course.price)}
+              </strong>
+
+              {isFree ? (
+                user ? (
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={handleEnroll}
+                    disabled={enrolling}
+                  >
+                    {enrolling
+                      ? 'Записываем...'
+                      : 'Записаться на курс'}
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="button button-primary"
+                  >
+                    Войти и записаться
+                  </Link>
+                )
+              ) : (
+                <span className="course-coming-soon">
+                  Оплата появится позже
+                </span>
+              )}
+
+              {actionError && (
+                <div className="form-error">
+                  {actionError}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="page">
+      <div className="container">
+        <section className="course-learning">
+          <aside className="course-sidebar">
+            <div className="course-progress">
+              <span>Прогресс</span>
+
+              <strong>{progressPercent}%</strong>
+
+              <div className="progress-bar">
+                <span
+                  style={{
+                    width: `${progressPercent}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {course.sections.map((section) => (
+              <div
+                key={section.id}
+                className="course-section"
+              >
+                <div className="course-section-title">
+                  <span>{section.position + 1}</span>
+
+                  <div>
+                    <strong>{section.title}</strong>
+
+                    {section.description && (
+                      <small>
+                        {section.description}
+                      </small>
+                    )}
+                  </div>
+                </div>
+
+                <div className="course-page-list">
+                  {section.pages.map((page) => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      className={`course-page-button ${
+                        selectedPage === page.id
+                          ? 'active'
+                          : ''
+                      } ${
+                        progress.includes(page.id)
+                          ? 'completed'
+                          : ''
+                      }`}
+                      onClick={() =>
+                        handlePageSelect(page.id)
+                      }
+                    >
+                      <span className="page-status">
+                        {progress.includes(page.id)
+                          ? '✓'
+                          : page.type === 'test'
+                            ? '◉'
+                            : page.type === 'ai_test'
+                              ? '✦'
+                              : '○'}
+                      </span>
+
+                      <span>{page.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </aside>
+
+          <article className="lesson-panel">
+            {currentPage ? (
+              <>
+                <div className="lesson-header">
+                  <span className="lesson-type">
+                    {currentPage.type === 'theory'
+                      ? 'ТЕОРИЯ'
+                      : currentPage.type === 'test'
+                        ? 'ТЕСТ'
+                        : 'AI-ТЕСТ'}
+                  </span>
+
+                  <h2>{currentPage.title}</h2>
+                </div>
+
+                {currentPage.type === 'theory' ? (
+                  <div className="lesson-content">
+                    <Markdown
+                      content={
+                        currentPage.content || ''
+                      }
+                    />
+                  </div>
+                ) : currentPage.type === 'test' ? (
+                  <TestPage
+                    pageId={currentPage.id}
+                    token={token || ''}
+                    onPassed={() =>
+                      handleTestPassed(currentPage.id)
+                    }
+                  />
+                ) : (
+                  <div className="lesson-placeholder">
+                    <div className="placeholder-icon">
+                      ✦
+                    </div>
+
+                    <h3>Персональный AI-тест</h3>
+
+                    <p>
+                      AI-тест будет формироваться на
+                      основе твоего прогресса и
+                      результатов обучения.
+                    </p>
+                  </div>
+                )}
+
+                {currentPage.type === 'test' ? null : currentPage.type === 'theory' ? (
+                  progress.includes(currentPage.id) ? (
+                    <div className="lesson-completed">
+                      ✓ Страница завершена
+                    </div>
+                  ) : (
+                    <div className="lesson-completed">
+                      Сохраняем прогресс...
+                    </div>
+                  )
+                ) : progress.includes(currentPage.id) ? (
+                  <div className="lesson-completed">
+                    ✓ Страница завершена
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="button button-primary lesson-complete"
+                    onClick={() =>
+                      markComplete(currentPage.id)
+                    }
+                    disabled={progressLoading}
+                  >
+                    {progressLoading
+                      ? 'Сохраняем...'
+                      : 'Отметить как пройденное'}
+                  </button>
+                )}
+
+                {currentPage.type !== 'test' && (
+                  <div className="lesson-navigation">
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => {
+                        const index = pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        )
+
+                        if (index > 0) {
+                          handlePageSelect(
+                            pages[index - 1].id,
+                          )
+                        }
+                      }}
+                      disabled={
+                        pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        ) <= 0
+                      }
+                    >
+                      ← Назад
+                    </button>
+
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => {
+                        const index = pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        )
+
+                        if (
+                          index <
+                          pages.length - 1
+                        ) {
+                          handlePageSelect(
+                            pages[index + 1].id,
+                          )
+                        }
+                      }}
+                      disabled={
+                        pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        ) >=
+                        pages.length - 1
+                      }
+                    >
+                      Далее →
+                    </button>
+                  </div>
+                )}
+
+                {currentPage.type === 'test' && (
+                  <div className="lesson-navigation">
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => {
+                        const index = pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        )
+
+                        if (index > 0) {
+                          handlePageSelect(
+                            pages[index - 1].id,
+                          )
+                        }
+                      }}
+                      disabled={
+                        pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        ) <= 0
+                      }
+                    >
+                      ← Назад
+                    </button>
+
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => {
+                        const index = pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        )
+
+                        if (
+                          index <
+                            pages.length - 1 &&
+                          progress.includes(
+                            currentPage.id,
+                          )
+                        ) {
+                          handlePageSelect(
+                            pages[index + 1].id,
+                          )
+                        }
+                      }}
+                      disabled={
+                        !progress.includes(
+                          currentPage.id,
+                        ) ||
+                        pages.findIndex(
+                          (page) =>
+                            page.id ===
+                            currentPage.id,
+                        ) >=
+                          pages.length - 1
+                      }
+                    >
+                      Далее →
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="empty-state">
+                <h3>
+                  В этом курсе пока нет страниц
+                </h3>
+              </div>
+            )}
+          </article>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function LoginPage({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) { const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setError(''); setLoading(true); try { await onLogin(email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти') } finally { setLoading(false) } }; return <main className="auth-page"><div className="auth-card"><div className="auth-icon">◉</div><span className="eyebrow">С возвращением</span><h1>Вход в Cringearium</h1><p className="auth-description">Войди, чтобы продолжить обучение.</p><form onSubmit={submit} className="auth-form"><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required /></label><label>Пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required /></label>{error && <div className="form-error">{error}</div>}<button type="submit" className="button button-primary" disabled={loading}>{loading ? 'Входим...' : 'Войти'}</button></form><p className="auth-bottom">Нет аккаунта? <Link href="/register" className="text-link">Зарегистрироваться</Link></p></div></main> }
