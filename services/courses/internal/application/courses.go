@@ -15,6 +15,8 @@ var (
 	ErrAlreadyHasAccess = errors.New("user already has access to course")
 	ErrPageNotFound = errors.New("page not found")
 	ErrPageNotInCourse = errors.New("page does not belong to course")
+	ErrTestNotFound = errors.New("test not found")
+	ErrInvalidTestAnswers = errors.New("invalid test answers")
 )
 
 type Courses struct { repository ports.CourseRepository }
@@ -58,4 +60,51 @@ func (c *Courses) GetCompletedPages(ctx context.Context, userID, courseID int64)
 
 func (c *Courses) CompletePage(ctx context.Context, userID, pageID int64) error {
 	return c.repository.CompletePage(ctx, userID, pageID)
+}
+
+func (c *Courses) GetTest(ctx context.Context, userID, pageID int64) (*domain.Test, error) {
+	test, err := c.repository.FindTestByPageID(ctx, userID, pageID)
+	if err != nil { return nil, err }
+	if test == nil { return nil, ErrTestNotFound }
+	return test, nil
+}
+
+func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer) (*domain.TestResult, error) {
+	if len(answers) == 0 { return nil, ErrInvalidTestAnswers }
+
+	var test *domain.Test
+	var err error
+	for _, pageID := range []int64{} {
+		_ = pageID
+	}
+	if test, err = c.repository.FindTestByID(ctx, userID, testID); err != nil {
+		return nil, err
+	}
+	if test == nil { return nil, ErrTestNotFound }
+	if len(answers) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
+
+	correctByQuestion := make(map[int64]int64, len(test.Questions))
+	questionIDs := make(map[int64]struct{}, len(test.Questions))
+	for _, question := range test.Questions {
+		questionIDs[question.ID] = struct{}{}
+		for _, answer := range question.Answers {
+			if answer.IsCorrect {
+				correctByQuestion[question.ID] = answer.ID
+			}
+		}
+	}
+
+	seen := make(map[int64]struct{}, len(answers))
+	correct := 0
+	for _, submitted := range answers {
+		if _, ok := questionIDs[submitted.QuestionID]; !ok { return nil, ErrInvalidTestAnswers }
+		if _, ok := seen[submitted.QuestionID]; ok { return nil, ErrInvalidTestAnswers }
+		seen[submitted.QuestionID] = struct{}{}
+		if submitted.AnswerID == correctByQuestion[submitted.QuestionID] { correct++ }
+	}
+	if len(seen) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
+
+	score := correct * 100 / len(test.Questions)
+	passed := score >= test.PassingScore
+	return c.repository.SubmitTest(ctx, userID, testID, answers, score, passed)
 }
