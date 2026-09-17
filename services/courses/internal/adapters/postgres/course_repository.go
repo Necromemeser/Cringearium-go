@@ -21,7 +21,7 @@ func (db *DB) FindAll(ctx context.Context) ([]*domain.Course, error) {
 			created_at,
 			updated_at
 		FROM courses
-		WHERE status != 'archived'
+		WHERE status = 'published'
 		ORDER BY id
 	`
 
@@ -76,10 +76,22 @@ func (db *DB) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, er
 			created_at,
 			updated_at
 		FROM courses
-		WHERE id = $1
+		WHERE id = $1 AND status = 'published'
 	`
 
-	if err := db.conn.GetContext(ctx, course, courseQuery, id); err != nil {
+	row := db.conn.QueryRowxContext(ctx, courseQuery, id)
+	if err := row.Scan(
+		&course.ID,
+		&course.Title,
+		&course.Theme,
+		&course.Description,
+		&course.Price,
+		&course.ImageID,
+		&course.AuthorID,
+		&course.Status,
+		&course.CreatedAt,
+		&course.UpdatedAt,
+	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
