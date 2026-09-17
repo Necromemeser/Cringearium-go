@@ -54,6 +54,17 @@ export async function getCourse(id: number): Promise<CourseDetails> {
   return (await response.json()) as CourseDetails
 }
 
+export async function enrollCourse(id: number, token: string): Promise<void> {
+  const response = await fetch(`/api/courses/${id}/enroll`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    return parseError(response, 'Не удалось записаться на курс')
+  }
+}
+
 export function formatCoursePrice(price: number): string {
   if (price === 0) {
     return 'Бесплатно'
