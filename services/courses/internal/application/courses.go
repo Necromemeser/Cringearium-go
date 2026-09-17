@@ -199,6 +199,7 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 
 func enrichAttemptAnswers(test *domain.Test, answers []domain.TestAttemptAnswer) {
 	correctByQuestion := make(map[int64]int64, len(test.Questions))
+
 	for _, question := range test.Questions {
 		for _, answer := range question.Answers {
 			if answer.IsCorrect {
@@ -209,6 +210,9 @@ func enrichAttemptAnswers(test *domain.Test, answers []domain.TestAttemptAnswer)
 	}
 
 	for i := range answers {
-		answers[i].CorrectAnswerID = correctByQuestion[answers[i].QuestionID]
+		correctAnswerID := correctByQuestion[answers[i].QuestionID]
+
+		answers[i].CorrectAnswerID = correctAnswerID
+		answers[i].IsCorrect = answers[i].AnswerID == correctAnswerID
 	}
 }
