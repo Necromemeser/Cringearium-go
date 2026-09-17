@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { getMe, login, type User } from './api/auth'
-import { formatCoursePrice, getCourses, type Course } from './api/courses'
+import { enrollCourse, formatCoursePrice, getCourse, getCourses, type Course, type CourseDetails } from './api/courses'
 import './App.css'
 
 const routes = ['/', '/courses', '/about', '/login', '/profile', '/register']
@@ -25,30 +25,11 @@ function usePath() {
 }
 
 function Link({ href, children, className = '' }: { href: string; children: ReactNode; className?: string }) {
-  return (
-    <a href={href} className={className} onClick={(event) => {
-      if (href.startsWith('/')) {
-        event.preventDefault()
-        navigate(href)
-      }
-    }}>
-      {children}
-    </a>
-  )
+  return <a href={href} className={className} onClick={(event) => { if (href.startsWith('/')) { event.preventDefault(); navigate(href) } }}>{children}</a>
 }
 
 function Header({ user, onLogout }: { user: User | null; onLogout: () => void }) {
-  return (
-    <header className="header">
-      <div className="container nav-container">
-        <Link href="/" className="brand"><span className="brand-icon">⌂</span><span>Cringearium</span></Link>
-        <nav className="nav-links"><Link href="/courses">📚 Каталог курсов</Link><Link href="/about">ℹ О нас</Link></nav>
-        <nav className="nav-actions">
-          {user ? <><Link href="/profile" className="profile-link">◉ {user.username}</Link><button type="button" className="nav-button" onClick={onLogout}>Выйти</button></> : <Link href="/login" className="login-link">Войти</Link>}
-        </nav>
-      </div>
-    </header>
-  )
+  return <header className="header"><div className="container nav-container"><Link href="/" className="brand"><span className="brand-icon">⌂</span><span>Cringearium</span></Link><nav className="nav-links"><Link href="/courses">📚 Каталог курсов</Link><Link href="/about">ℹ О нас</Link></nav><nav className="nav-actions">{user ? <><Link href="/profile" className="profile-link">◉ {user.username}</Link><button type="button" className="nav-button" onClick={onLogout}>Выйти</button></> : <Link href="/login" className="login-link">Войти</Link>}</nav></div></header>
 }
 
 function Footer() {
@@ -64,7 +45,7 @@ function CourseCard({ course }: { course: Course }) {
 }
 
 function HomePage({ courses }: { courses: Course[] }) {
-  return <><section className="hero"><div className="container hero-content"><div className="hero-copy"><span className="eyebrow">ОБРАЗОВАТЕЛЬНАЯ ПЛАТФОРМА</span><h1>Учиться можно<br /><span>без лишнего кринжа.</span></h1><p>Курсы, практика и персональная помощь в одном месте. Разбираемся со сложным нормальным человеческим языком.</p><div className="hero-actions"><Link href="/courses" className="button button-primary">Смотреть курсы</Link><Link href="/about" className="button button-secondary">Узнать больше</Link></div></div><div className="hero-card"><div className="hero-card-icon">✦</div><h2>Курс дня</h2><p>{courses[0]?.title || 'Курсы скоро появятся'}</p><span>{courses[0]?.theme || 'Новые материалы'}</span><Link href="/courses" className="text-link">Перейти к курсу →</Link></div></div></section><section className="section"><div className="container"><div className="section-heading"><div><span className="eyebrow">ВОЗМОЖНОСТИ</span><h2>Всё необходимое для обучения</h2></div></div><div className="feature-grid"><article className="feature-card"><div className="feature-icon">📖</div><h3>Понятные курсы</h3><p>Материалы разбиты на небольшие последовательные шаги.</p></article><article className="feature-card"><div className="feature-icon">✓</div><h3>Практика</h3><p>Тесты помогают сразу проверить, что материал действительно усвоен.</p></article><article className="feature-card"><div className="feature-icon">✦</div><h3>Умный помощник</h3><p>Персональная помощь появится в следующих этапах развития платформы.</p></article></div></div></section><section className="section section-muted"><div className="container"><div className="section-heading inline-heading"><div><span className="eyebrow">КУРСЫ</span><h2>Популярные направления</h2></div><Link href="/courses" className="text-link">Весь каталог →</Link></div><CourseGrid items={courses} /></div></section></>
+  return <><section className="hero"><div className="container hero-content"><div className="hero-copy"><span className="eyebrow">ОБРАЗОВАТЕЛЬНАЯ ПЛАТФОРМА</span><h1>Учиться можно<br /><span>без лишнего кринжа.</span></h1><p>Курсы, практика и персональная помощь в одном месте. Разбираемся со сложным нормальным человеческим языком.</p><div className="hero-actions"><Link href="/courses" className="button button-primary">Смотреть курсы</Link><Link href="/about" className="button button-secondary">Узнать больше</Link></div></div><div className="hero-card"><div className="hero-card-icon">✦</div><h2>Курс дня</h2><p>{courses[0]?.title || 'Курсы скоро появятся'}</p><span>{courses[0]?.theme || 'Новые материалы'}</span><Link href={courses[0] ? `/courses/${courses[0].id}` : '/courses'} className="text-link">Перейти к курсу →</Link></div></div></section><section className="section"><div className="container"><div className="section-heading"><div><span className="eyebrow">ВОЗМОЖНОСТИ</span><h2>Всё необходимое для обучения</h2></div></div><div className="feature-grid"><article className="feature-card"><div className="feature-icon">📖</div><h3>Понятные курсы</h3><p>Материалы разбиты на небольшие последовательные шаги.</p></article><article className="feature-card"><div className="feature-icon">✓</div><h3>Практика</h3><p>Тесты помогают сразу проверить, что материал действительно усвоен.</p></article><article className="feature-card"><div className="feature-icon">✦</div><h3>Умный помощник</h3><p>Персональная помощь появится в следующих этапах развития платформы.</p></article></div></div></section><section className="section section-muted"><div className="container"><div className="section-heading inline-heading"><div><span className="eyebrow">КУРСЫ</span><h2>Популярные направления</h2></div><Link href="/courses" className="text-link">Весь каталог →</Link></div><CourseGrid items={courses} /></div></section></>
 }
 
 function CoursesPage() {
@@ -75,10 +56,7 @@ function CoursesPage() {
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    getCourses()
-      .then((data) => setCourses(data.filter((course) => course.status === 'published')))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить курсы'))
-      .finally(() => setLoading(false))
+    getCourses().then((data) => setCourses(data.filter((course) => course.status === 'published'))).catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить курсы')).finally(() => setLoading(false))
   }, [])
 
   const filteredCourses = courses.filter((course) => {
@@ -90,17 +68,49 @@ function CoursesPage() {
   return <main className="page"><div className="container"><div className="page-heading"><span className="eyebrow">ОБУЧЕНИЕ</span><h1>Каталог курсов</h1><p>Выбирай направление и двигайся вперёд в удобном темпе.</p></div><form className="catalog-toolbar" onSubmit={(event) => { event.preventDefault(); setQuery(search) }}><input aria-label="Поиск курсов" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск по названию курса..." /><button type="submit">Найти</button></form>{loading && <div className="loading-screen">Загружаем курсы...</div>}{error && <div className="form-error">{error}</div>}{!loading && !error && filteredCourses.length === 0 && <div className="empty-state"><div className="empty-icon">📚</div><h3>{query ? 'Ничего не найдено' : 'Курсов пока нет'}</h3><p>{query ? 'Попробуй изменить поисковый запрос.' : 'Опубликованные курсы появятся здесь.'}</p></div>}{!loading && !error && filteredCourses.length > 0 && <CourseGrid items={filteredCourses} />}</div></main>
 }
 
-function LoginPage({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+function CoursePage({ courseId, user }: { courseId: number; user: User | null }) {
+  const [course, setCourse] = useState<CourseDetails | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrolled, setEnrolled] = useState(false)
+  const [enrollError, setEnrollError] = useState('')
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setError(''); setLoading(true)
-    try { await onLogin(email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти') } finally { setLoading(false) }
+  useEffect(() => {
+    getCourse(courseId).then(setCourse).catch((err) => setError(err instanceof Error ? err.message : 'Не удалось загрузить курс')).finally(() => setLoading(false))
+  }, [courseId])
+
+  const handleEnroll = async () => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!user || !token) {
+      navigate('/login')
+      return
+    }
+
+    setEnrolling(true)
+    setEnrollError('')
+    try {
+      await enrollCourse(courseId, token)
+      setEnrolled(true)
+    } catch (err) {
+      setEnrollError(err instanceof Error ? err.message : 'Не удалось записаться на курс')
+    } finally {
+      setEnrolling(false)
+    }
   }
 
+  if (loading) return <main className="page"><div className="container"><div className="loading-screen">Загружаем курс...</div></div></main>
+  if (error || !course) return <main className="page"><div className="container empty-page"><span className="eyebrow">ОШИБКА</span><h1>Не удалось открыть курс</h1><p>{error || 'Курс не найден.'}</p><Link href="/courses" className="button button-primary">Вернуться в каталог</Link></div></main>
+
+  const isFree = course.price === 0
+  const hasContent = course.sections.some((section) => section.pages.length > 0)
+
+  return <main className="page"><div className="container"><div className="course-detail-hero"><div><span className="eyebrow">{course.theme || 'ОБУЧЕНИЕ'}</span><h1>{course.title}</h1><p>{course.description || 'Описание курса пока не добавлено.'}</p></div><div className="course-detail-action"><strong>{formatCoursePrice(course.price)}</strong>{enrolled ? <span className="enroll-success">✓ Ты записан на курс</span> : isFree ? <>{user ? <button type="button" className="button button-primary" onClick={handleEnroll} disabled={enrolling}>{enrolling ? 'Записываем...' : 'Записаться на курс'}</button> : <Link href="/login" className="button button-primary">Войти и записаться</Link>}</> : <span className="course-coming-soon">Оплата появится позже</span>}{enrollError && <div className="form-error">{enrollError}</div>}</div></div><section className="course-content"><div className="section-heading"><div><span className="eyebrow">ПРОГРАММА</span><h2>Содержание курса</h2></div></div>{!hasContent && <div className="empty-state"><div className="empty-icon">📖</div><h3>Материалы пока не добавлены</h3><p>Содержание курса появится здесь.</p></div>}{course.sections.map((section) => <article className="course-section" key={section.id}><div className="course-section-heading"><span>Раздел {section.position + 1}</span><h3>{section.title}</h3>{section.description && <p>{section.description}</p>}</div><div className="course-pages">{section.pages.map((page) => <div className="course-page-preview" key={page.id}><div><span className="course-page-type">{page.type === 'theory' ? 'ТЕОРИЯ' : page.type === 'test' ? 'ТЕСТ' : 'AI-ТЕСТ'}</span><h4>{page.title}</h4></div>{page.content && page.type === 'theory' && <p>{page.content}</p>}</div>)}</div></article>)}</section><Link href="/courses" className="text-link">← Вернуться в каталог</Link></div></main>
+}
+
+function LoginPage({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(''); setLoading(true); try { await onLogin(email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти') } finally { setLoading(false) } }
   return <main className="auth-page"><div className="auth-card"><div className="auth-icon">◉</div><span className="eyebrow">С возвращением</span><h1>Вход в Cringearium</h1><p className="auth-description">Войди, чтобы продолжить обучение.</p><form onSubmit={handleSubmit} className="auth-form"><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></label><label>Пароль<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" required /></label>{error && <div className="form-error">{error}</div>}<button className="button button-primary" type="submit" disabled={loading}>{loading ? 'Входим...' : 'Войти'}</button></form><p className="auth-bottom">Нет аккаунта? <Link href="/register">Зарегистрироваться</Link></p></div></main>
 }
 
@@ -120,14 +130,15 @@ function NotFound() { return <main className="page"><div className="container em
 
 function App() {
   const path = usePath(); const [user, setUser] = useState<User | null>(null); const [authLoading, setAuthLoading] = useState(true); const [homeCourses, setHomeCourses] = useState<Course[]>([])
-  useEffect(() => { const token = localStorage.getItem(TOKEN_KEY); if (!token) { setAuthLoading(false); return } getMe(token).then(setUser).catch(() => localStorage.removeItem(TOKEN_KEY)).finally(() => setAuthLoading(false)) }, [])
+  useEffect(() => { const token = localStorage.getItem(TOKEN_KEY); if (!token) { setAuthLoading(false); return } getMe(token).then(setUser).catch(() => { localStorage.removeItem(TOKEN_KEY); setUser(null) }).finally(() => setAuthLoading(false)) }, [])
   useEffect(() => { getCourses().then((data) => setHomeCourses(data.filter((course) => course.status === 'published'))).catch(() => setHomeCourses([])) }, [])
   const handleLogin = async (email: string, password: string) => { const token = await login(email, password); localStorage.setItem(TOKEN_KEY, token); const currentUser = await getMe(token); setUser(currentUser); navigate('/profile') }
-  const handleRegister = async (username: string, email: string, password: string) => { await import('./api/auth').then(({ register }) => register(username, email, password)); await handleLogin(email, password) }
+  const handleRegister = async (username: string, email: string, password: string) => { const { register } = await import('./api/auth'); await register(username, email, password); await handleLogin(email, password) }
   const handleLogout = () => { localStorage.removeItem(TOKEN_KEY); setUser(null); navigate('/') }
   if (authLoading) return <div className="loading-screen">Загрузка...</div>
-  const page = routes.includes(path) || path.startsWith('/courses/') ? path : '/404'
-  return <div className="app-shell"><Header user={user} onLogout={handleLogout} />{page === '/' && <HomePage courses={homeCourses} />}{page === '/courses' && <CoursesPage />}{page === '/login' && <LoginPage onLogin={handleLogin} />}{page === '/register' && <RegisterPage onRegister={handleRegister} />}{page === '/profile' && <ProfilePage user={user} />}{page === '/about' && <AboutPage />}{page === '/404' && <NotFound />}<Footer /></div>
+  const courseMatch = path.match(/^\/courses\/(\d+)$/)
+  const page = routes.includes(path) || courseMatch ? path : '/404'
+  return <div className="app-shell"><Header user={user} onLogout={handleLogout} />{page === '/' && <HomePage courses={homeCourses} />}{page === '/courses' && <CoursesPage />}{courseMatch && <CoursePage courseId={Number(courseMatch[1])} user={user} />}{page === '/login' && <LoginPage onLogin={handleLogin} />}{page === '/register' && <RegisterPage onRegister={handleRegister} />}{page === '/profile' && <ProfilePage user={user} />}{page === '/about' && <AboutPage />}{page === '/404' && <NotFound />}<Footer /></div>
 }
 
 export default App
