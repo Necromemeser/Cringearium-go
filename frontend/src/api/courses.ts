@@ -27,6 +27,38 @@ export type Course = {
 
 export type CourseDetails = Course & { sections: CourseSection[] }
 
+export type TestAnswer = {
+  id: number
+  text: string
+  position: number
+}
+
+export type TestQuestion = {
+  id: number
+  question: string
+  position: number
+  answers: TestAnswer[]
+}
+
+export type CourseTest = {
+  id: number
+  page_id: number
+  passing_score: number
+  questions: TestQuestion[]
+}
+
+export type TestSubmissionAnswer = {
+  question_id: number
+  answer_id: number
+}
+
+export type TestResult = {
+  attempt_id: number
+  score: number
+  passed: boolean
+  passing_score: number
+}
+
 type CourseDetailsResponse = CourseDetails | {
   course: Course
   sections: CourseSection[]
@@ -76,6 +108,25 @@ export async function getCourseProgress(id: number, token: string): Promise<numb
 export async function completePage(id: number, token: string): Promise<void> {
   const response = await fetch(`/api/pages/${id}/complete`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
   if (!response.ok) return parseError(response, 'Не удалось сохранить прогресс')
+}
+
+export async function getTest(pageId: number, token: string): Promise<CourseTest> {
+  const response = await fetch(`/api/pages/${pageId}/test`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!response.ok) return parseError(response, 'Не удалось загрузить тест')
+  return (await response.json()) as CourseTest
+}
+
+export async function submitTest(testId: number, answers: TestSubmissionAnswer[], token: string): Promise<TestResult> {
+  const response = await fetch(`/api/tests/${testId}/submit`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ answers }),
+  })
+  if (!response.ok) return parseError(response, 'Не удалось отправить тест')
+  return (await response.json()) as TestResult
 }
 
 export function formatCoursePrice(price: number): string {
