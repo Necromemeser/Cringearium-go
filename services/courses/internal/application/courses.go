@@ -33,9 +33,7 @@ func (c *Courses) GetByID(ctx context.Context, id int64) (*domain.CourseDetails,
 	return course, nil
 }
 
-func (c *Courses) FindEnrolled(ctx context.Context, userID int64) ([]*domain.Course, error) {
-	return c.repository.FindEnrolled(ctx, userID)
-}
+func (c *Courses) FindEnrolled(ctx context.Context, userID int64) ([]*domain.Course, error) { return c.repository.FindEnrolled(ctx, userID) }
 
 func (c *Courses) Enroll(ctx context.Context, userID, courseID int64) error {
 	course, err := c.repository.FindByID(ctx, courseID)
@@ -59,9 +57,7 @@ func (c *Courses) GetCompletedPages(ctx context.Context, userID, courseID int64)
 	return c.repository.GetCompletedPages(ctx, userID, courseID)
 }
 
-func (c *Courses) CompletePage(ctx context.Context, userID, pageID int64) error {
-	return c.repository.CompletePage(ctx, userID, pageID)
-}
+func (c *Courses) CompletePage(ctx context.Context, userID, pageID int64) error { return c.repository.CompletePage(ctx, userID, pageID) }
 
 func (c *Courses) GetTest(ctx context.Context, userID, pageID int64) (*domain.Test, *domain.TestAttempt, error) {
 	test, err := c.repository.FindTestByPageID(ctx, userID, pageID)
@@ -82,7 +78,6 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 	attempt, err := c.repository.FindLatestTestAttempt(ctx, userID, testID)
 	if err != nil { return nil, err }
 	if attempt != nil && attempt.Passed { return nil, ErrTestAlreadyPassed }
-
 	if len(test.Questions) == 0 || len(answers) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
 
 	correctByQuestion := make(map[int64]int64, len(test.Questions))
@@ -100,12 +95,14 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 
 	seen := make(map[int64]struct{}, len(answers))
 	correct := 0
-	for _, submitted := range answers {
+	for i := range answers {
+		submitted := &answers[i]
 		if _, ok := questionIDs[submitted.QuestionID]; !ok { return nil, ErrInvalidTestAnswers }
 		if _, ok := seen[submitted.QuestionID]; ok { return nil, ErrInvalidTestAnswers }
 		if _, ok := answerIDsByQuestion[submitted.QuestionID][submitted.AnswerID]; !ok { return nil, ErrInvalidTestAnswers }
 		seen[submitted.QuestionID] = struct{}{}
-		if submitted.AnswerID == correctByQuestion[submitted.QuestionID] { correct++ }
+		submitted.IsCorrect = submitted.AnswerID == correctByQuestion[submitted.QuestionID]
+		if submitted.IsCorrect { correct++ }
 	}
 	if len(seen) != len(test.Questions) { return nil, ErrInvalidTestAnswers }
 
@@ -115,5 +112,6 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 	if err != nil { return nil, err }
 	if result == nil { return nil, errors.New("test result is nil") }
 	result.PassingScore = test.PassingScore
+	result.Answers = answers
 	return result, nil
 }
