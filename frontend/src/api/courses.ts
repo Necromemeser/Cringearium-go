@@ -1,3 +1,19 @@
+export type CoursePage = {
+  id: number
+  title: string
+  type: 'theory' | 'test' | 'ai_test'
+  content: string
+  position: number
+}
+
+export type CourseSection = {
+  id: number
+  title: string
+  description: string
+  position: number
+  pages: CoursePage[]
+}
+
 export type Course = {
   id: number
   title: string
@@ -9,15 +25,33 @@ export type Course = {
   status: 'draft' | 'published' | 'archived'
 }
 
+export type CourseDetails = Course & {
+  sections: CourseSection[]
+}
+
+async function parseError(response: Response, fallback: string): Promise<never> {
+  const message = (await response.text()).trim()
+  throw new Error(message || fallback)
+}
+
 export async function getCourses(): Promise<Course[]> {
   const response = await fetch('/api/courses')
 
   if (!response.ok) {
-    const message = (await response.text()).trim()
-    throw new Error(message || 'Не удалось загрузить курсы')
+    return parseError(response, 'Не удалось загрузить курсы')
   }
 
   return (await response.json()) as Course[]
+}
+
+export async function getCourse(id: number): Promise<CourseDetails> {
+  const response = await fetch(`/api/courses/${id}`)
+
+  if (!response.ok) {
+    return parseError(response, 'Не удалось загрузить курс')
+  }
+
+  return (await response.json()) as CourseDetails
 }
 
 export function formatCoursePrice(price: number): string {
@@ -25,5 +59,5 @@ export function formatCoursePrice(price: number): string {
     return 'Бесплатно'
   }
 
-  return `${new Intl.NumberFormat('ru-RU').format(price / 100)} ₽`
+  return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
 }
