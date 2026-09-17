@@ -11,6 +11,101 @@ function navigate(path: string) { window.history.pushState({}, '', path); window
 function usePath() { const [path, setPath] = useState(window.location.pathname); useEffect(() => { const handle = () => setPath(window.location.pathname); window.addEventListener('popstate', handle); return () => window.removeEventListener('popstate', handle) }, []); return path }
 function Link({ href, children, className = '' }: { href: string; children: ReactNode; className?: string }) { return <a href={href} className={className} onClick={(e) => { if (href.startsWith('/')) { e.preventDefault(); navigate(href) } }}>{children}</a> }
 
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const pattern = /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|(\*|_)([^*_]+)\7)/g
+  const result: ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) result.push(text.slice(lastIndex, match.index))
+
+    if (match[2] || match[3]) result.push(<strong key={key++}>{match[2] || match[3]}</strong>)
+    else if (match[4]) result.push(<code key={key++}>{match[4]}</code>)
+    else if (match[5] && match[6]) result.push(<a key={key++} href={match[6]} target="_blank" rel="noreferrer">{match[5]}</a>)
+    else if (match[8]) result.push(<em key={key++}>{match[8]}</em>)
+
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) result.push(text.slice(lastIndex))
+  return result
+}
+
+function Markdown({ content }: { content: string }) {
+  const lines = content.replace(/\r\n?/g, '\n').split('\n')
+  const blocks: ReactNode[] = []
+  let paragraph: string[] = []
+  let list: string[] = []
+  let orderedList = false
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return
+    blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>)
+    paragraph = []
+  }
+
+  const flushList = () => {
+    if (!list.length) return
+    const items = list.map((item, index) => <li key={index}>{renderInlineMarkdown(item)}</li>)
+    blocks.push(orderedList ? <ol key={`ol-${blocks.length}`}>{items}</ol> : <ul key={`ul-${blocks.length}`}>{items}</ul>)
+    list = []
+  }
+
+  lines.forEach((line) => {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      flushParagraph()
+      flushList()
+      return
+    }
+
+    const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed)
+    if (heading) {
+      flushParagraph()
+      flushList()
+      const level = Math.min(heading[1].length, 4)
+      const text = renderInlineMarkdown(heading[2])
+      if (level === 1) blocks.push(<h3 key={`h-${blocks.length}`}>{text}</h3>)
+      else if (level === 2) blocks.push(<h4 key={`h-${blocks.length}`}>{text}</h4>)
+      else blocks.push(<h5 key={`h-${blocks.length}`}>{text}</h5>)
+      return
+    }
+
+    const unordered = /^[-*+]\s+(.+)$/.exec(trimmed)
+    const ordered = /^\d+[.)]\s+(.+)$/.exec(trimmed)
+    if (unordered || ordered) {
+      flushParagraph()
+      if (list.length && orderedList !== Boolean(ordered)) flushList()
+      orderedList = Boolean(ordered)
+      list.push((unordered || ordered)![1])
+      return
+    }
+
+    if (trimmed.startsWith('> ')) {
+      flushParagraph()
+      flushList()
+      blocks.push(<blockquote key={`q-${blocks.length}`}>{renderInlineMarkdown(trimmed.slice(2))}</blockquote>)
+      return
+    }
+
+    if (/^---+$/.test(trimmed)) {
+      flushParagraph()
+      flushList()
+      blocks.push(<hr key={`hr-${blocks.length}`} />)
+      return
+    }
+
+    paragraph.push(trimmed)
+  })
+
+  flushParagraph()
+  flushList()
+
+  return <div className="markdown-content">{blocks.length ? blocks : <p>Материал этой страницы пока не добавлен.</p>}</div>
+}
+
 function Header({ user, onLogout }: { user: User | null; onLogout: () => void }) { return <header className="header"><div className="container nav-container"><Link href="/" className="brand"><span className="brand-icon">⌂</span><span>Cringearium</span></Link><nav className="nav-links"><Link href="/courses">📚 Каталог курсов</Link><Link href="/about">ℹ О нас</Link></nav><nav className="nav-actions">{user ? <><Link href="/profile" className="profile-link">◉ {user.username}</Link><button type="button" className="nav-button" onClick={onLogout}>Выйти</button></> : <Link href="/login" className="login-link">Войти</Link>}</nav></div></header> }
 function Footer() { return <footer className="footer"><div className="container footer-grid"><div><div className="footer-brand">Cringearium</div><p>Образовательная платформа, где учиться немного проще.</p></div><div><h3>Навигация</h3><Link href="/courses">Каталог курсов</Link><Link href="/about">О нас</Link><Link href="/login">Вход</Link></div><div><h3>Проект</h3><a href="https://github.com/Necromemeser/Cringearium-go" target="_blank" rel="noreferrer">GitHub</a><span>© 2026 Cringearium</span></div></div></footer> }
 function CourseGrid({ items }: { items: Course[] }) { return <div className="course-grid">{items.map((course) => <CourseCard key={course.id} course={course} />)}</div> }
@@ -31,14 +126,16 @@ function CoursePage({ courseId, user }: { courseId: number; user: User | null })
   const pages = course.sections.flatMap((s) => s.pages); const currentPage = pages.find((p) => p.id === selectedPage) || pages[0]; const progressPercent = pages.length ? Math.round(progress.filter((id) => pages.some((p) => p.id === id)).length / pages.length * 100) : 0; const isFree = course.price === 0
   return <main className="page"><div className="container"><div className="course-detail-hero"><div><span className="eyebrow">{course.theme || 'ОБУЧЕНИЕ'}</span><h1>{course.title}</h1><p>{course.description || 'Описание курса пока не добавлено.'}</p></div><div className="course-detail-action"><strong>{formatCoursePrice(course.price)}</strong>{enrolled ? <span className="enroll-success">✓ Ты записан на курс</span> : isFree ? user ? <button type="button" className="button button-primary" onClick={handleEnroll} disabled={enrolling}>{enrolling ? 'Записываем...' : 'Записаться на курс'}</button> : <Link href="/login" className="button button-primary">Войти и записаться</Link> : <span className="course-coming-soon">Оплата появится позже</span>}{actionError && <div className="form-error">{actionError}</div>}</div></div>
     <section className="course-learning"><aside className="course-sidebar"><div className="course-progress"><span>Прогресс</span><strong>{progressPercent}%</strong><div className="progress-bar"><span style={{ width: `${progressPercent}%` }} /></div></div>{course.sections.map((section) => <div className="course-section-nav" key={section.id}><span>Раздел {section.position + 1}</span><h3>{section.title}</h3>{section.pages.map((page) => <button type="button" key={page.id} className={`course-page-nav ${selectedPage === page.id ? 'active' : ''}`} onClick={() => setSelectedPage(page.id)}><span>{progress.includes(page.id) ? '✓' : page.type === 'theory' ? '📖' : page.type === 'test' ? '✓' : '✦'}</span>{page.title}</button>)}</div>)}</aside>
-      <div className="course-lesson">{currentPage ? <><div className="lesson-header"><span className="course-page-type">{currentPage.type === 'theory' ? 'ТЕОРИЯ' : currentPage.type === 'test' ? 'ТЕСТ' : 'AI-ТЕСТ'}</span><h2>{currentPage.title}</h2></div>{currentPage.type === 'theory' ? <div className="lesson-content">{currentPage.content ? currentPage.content.split('\n').map((line, i) => line.trim() ? <p key={i}>{line}</p> : <br key={i} />) : <p>Материал этой страницы пока не добавлен.</p>}</div> : <div className="lesson-placeholder"><div className="empty-icon">{currentPage.type === 'test' ? '✓' : '✦'}</div><h3>{currentPage.type === 'test' ? 'Тест' : 'AI-тест'}</h3><p>{currentPage.type === 'test' ? 'Интерактивный тест подключим следующим этапом.' : 'Персонализированный AI-тест пока находится в разработке.'}</p></div>}{user && <div className="lesson-actions">{progress.includes(currentPage.id) ? <span className="enroll-success">✓ Страница пройдена</span> : <button type="button" className="button button-primary" onClick={() => markComplete(currentPage.id)} disabled={progressLoading}>{progressLoading ? 'Сохраняем...' : currentPage.type === 'theory' ? 'Отметить как прочитанное' : 'Отметить как пройденное'}</button>}</div>}<div className="lesson-navigation">{(() => { const index = pages.findIndex((p) => p.id === currentPage.id); const previous = pages[index - 1]; const next = pages[index + 1]; return <>{previous ? <button type="button" className="button button-secondary" onClick={() => setSelectedPage(previous.id)}>← Назад</button> : <span />}{next ? <button type="button" className="button button-primary" onClick={() => setSelectedPage(next.id)}>Следующая →</button> : <span className="enroll-success">Курс завершён</span>}</> })()}</div></> : <div className="empty-state"><h3>В курсе пока нет страниц</h3></div>}</div></section><Link href="/courses" className="text-link">← Вернуться в каталог</Link></div></main> }
+      <div className="course-lesson">{currentPage ? <><div className="lesson-header"><span className="course-page-type">{currentPage.type === 'theory' ? 'ТЕОРИЯ' : currentPage.type === 'test' ? 'ТЕСТ' : 'AI-ТЕСТ'}</span><h2>{currentPage.title}</h2></div>{currentPage.type === 'theory' ? <div className="lesson-content"><Markdown content={currentPage.content || ''} /></div> : <div className="lesson-placeholder"><div className="empty-icon">{currentPage.type === 'test' ? '✓' : '✦'}</div><h3>{currentPage.type === 'test' ? 'Тест' : 'AI-тест'}</h3><p>{currentPage.type === 'test' ? 'Интерактивный тест подключим следующим этапом.' : 'Персонализированный AI-тест пока находится в разработке.'}</p></div>}{user && <div className="lesson-actions">{progress.includes(currentPage.id) ? <span className="enroll-success">✓ Страница пройдена</span> : <button type="button" className="button button-primary" onClick={() => markComplete(currentPage.id)} disabled={progressLoading}>{progressLoading ? 'Сохраняем...' : currentPage.type === 'theory' ? 'Отметить как прочитанное' : 'Отметить как пройденное'}</button>}</div>}<div className="lesson-navigation">{(() => { const index = pages.findIndex((p) => p.id === currentPage.id); const previous = pages[index - 1]; const next = pages[index + 1]; return <>{previous ? <button type="button" className="button button-secondary" onClick={() => setSelectedPage(previous.id)}>← Назад</button> : <span />}{next ? <button type="button" className="button button-primary" onClick={() => setSelectedPage(next.id)}>Следующая →</button> : <span className="enroll-success">Курс завершён</span>}</> })()}</div></> : <div className="empty-state"><h3>В курсе пока нет страниц</h3></div>}</div></section><Link href="/courses" className="text-link">← Вернуться в каталог</Link></div></main> }
 
-function LoginPage({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) { const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setError(''); setLoading(true); try { await onLogin(email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти') } finally { setLoading(false) } }; return <main className="auth-page"><div className="auth-card"><div className="auth-icon">◉</div><span className="eyebrow">С возвращением</span><h1>Вход в Cringearium</h1><p className="auth-description">Войди, чтобы продолжить обучение.</p><form onSubmit={submit} className="auth-form"><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required /></label><label>Пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required /></label>{error && <div className="form-error">{error}</div>}<button className="button button-primary" type="submit" disabled={loading}>{loading ? 'Входим...' : 'Войти'}</button></form><p className="auth-bottom">Нет аккаунта? <Link href="/register">Зарегистрироваться</Link></p></div></main> }
-function RegisterPage({ onRegister }: { onRegister: (username: string, email: string, password: string) => Promise<void> }) { const [username, setUsername] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setError(''); setLoading(true); try { await onRegister(username, email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось зарегистрироваться') } finally { setLoading(false) } }; return <main className="auth-page"><div className="auth-card"><div className="auth-icon">✦</div><span className="eyebrow">Новый аккаунт</span><h1>Регистрация</h1><p className="auth-description">Создай аккаунт и начни обучение.</p><form onSubmit={submit} className="auth-form"><label>Имя пользователя<input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" required /></label><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required /></label><label>Пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" minLength={8} required /></label>{error && <div className="form-error">{error}</div>}<button className="button button-primary" type="submit" disabled={loading}>{loading ? 'Создаём...' : 'Зарегистрироваться'}</button></form><p className="auth-bottom">Уже есть аккаунт? <Link href="/login">Войти</Link></p></div></main> }
+function LoginPage({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) { const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setError(''); setLoading(true); try { await onLogin(email, password) } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось войти') } finally { setLoading(false) } }; return <main className="auth-page"><div className="auth-card"><div className="auth-icon">◉</div><span className="eyebrow">С возвращением</span><h1>Вход в Cringearium</h1><p className="auth-description">Войди, чтобы продолжить обучение.</p><form onSubmit={submit} className="auth-form"><label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required /></label><label>Пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required /></label>{error && <div className="form-error">{error}</div>}<button type="submit" className="button button-primary" disabled={loading}>{loading ? 'Входим...' : 'Войти'}</button></form><p className="auth-bottom">Нет аккаунта? <Link href="/register" className="text-link">Зарегистрироваться</Link></p></div></main> }
 
-function ProfilePage({ user }: { user: User | null }) { const [courses, setCourses] = useState<Course[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const token = localStorage.getItem(TOKEN_KEY); useEffect(() => { if (!token) { setLoading(false); return }; getEnrolledCourses(token).then(setCourses).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить мои курсы')).finally(() => setLoading(false)) }, [token]); if (!user) return <main className="page"><div className="container empty-page"><h1>Нужна авторизация</h1><p>Войди в аккаунт, чтобы открыть личный кабинет.</p><Link href="/login" className="button button-primary">Войти</Link></div></main>; return <main className="page"><div className="container"><div className="page-heading"><span className="eyebrow">ПРОФИЛЬ</span><h1>Личный кабинет</h1><p>Твоя учётная запись и учебный прогресс.</p></div><div className="profile-layout"><section className="profile-card profile-summary"><div className="avatar">{user.username.charAt(0).toUpperCase()}</div><div><h2>{user.username}</h2><p>{user.email}</p><p>Роль: {user.role}</p></div></section><section className="profile-card"><div className="card-heading"><div><span className="eyebrow">ОБУЧЕНИЕ</span><h2>Мои курсы</h2></div></div>{loading && <div className="loading-screen">Загружаем курсы...</div>}{error && <div className="form-error">{error}</div>}{!loading && !error && courses.length === 0 && <div className="empty-state"><div className="empty-icon">📚</div><h3>Пока нет курсов</h3><p>Загляни в каталог и выбери что-нибудь для обучения.</p><Link href="/courses" className="button button-primary">Открыть каталог</Link></div>}{!loading && !error && courses.length > 0 && <CourseGrid items={courses} />}</section></div></div></main> }
-function AboutPage() { return <main className="page"><div className="container narrow"><div className="page-heading"><span className="eyebrow">CRINGEARium</span><h1>О проекте</h1><p>Образовательная платформа, которую мы собираем с нуля на современном стеке.</p></div><div className="about-card"><h2>Зачем это всё?</h2><p>Cringearium задуман как место, где учебный материал не приходится пробивать головой через бесконечные стены текста. Курсы состоят из небольших страниц, практических заданий и тестов.</p><p>Платформа развивается как отдельный проект: Go-бэкенд, React-фронтенд и набор независимых сервисов. В будущем здесь появятся AI-помощник и персонализированные тесты.</p></div><div className="about-stats"><div><strong>Go</strong><span>backend</span></div><div><strong>React</strong><span>frontend</span></div><div><strong>5+</strong><span>сервисов</span></div></div></div></main> }
-function NotFound() { return <main className="page"><div className="container empty-page"><span className="eyebrow">404</span><h1>Страница не найдена</h1><p>Похоже, такой страницы пока нет.</p><Link href="/" className="button button-primary">На главную</Link></div></main> }
+function RegisterPage() { return <main className="auth-page"><div className="auth-card"><div className="auth-icon">✦</div><span className="eyebrow">НОВЫЙ АККАУНТ</span><h1>Регистрация</h1><p className="auth-description">Создай аккаунт и начни обучение.</p><div className="empty-state"><h3>Регистрация подключается</h3><p>Форма регистрации будет добавлена следующим этапом.</p></div></div></main> }
 
-function App() { const path = usePath(); const [user, setUser] = useState<User | null>(null); const [authLoading, setAuthLoading] = useState(true); const [homeCourses, setHomeCourses] = useState<Course[]>([]); useEffect(() => { const token = localStorage.getItem(TOKEN_KEY); if (!token) { setAuthLoading(false); return }; getMe(token).then(setUser).catch(() => { localStorage.removeItem(TOKEN_KEY); setUser(null) }).finally(() => setAuthLoading(false)) }, []); useEffect(() => { getCourses().then((data) => setHomeCourses(data.filter((c) => c.status === 'published'))).catch(() => setHomeCourses([])) }, []); const handleLogin = async (email: string, password: string) => { const token = await login(email, password); localStorage.setItem(TOKEN_KEY, token); setUser(await getMe(token)); navigate('/profile') }; const handleRegister = async (username: string, email: string, password: string) => { const { register } = await import('./api/auth'); await register(username, email, password); await handleLogin(email, password) }; const handleLogout = () => { localStorage.removeItem(TOKEN_KEY); setUser(null); navigate('/') }; if (authLoading) return <div className="loading-screen">Загрузка...</div>; const courseMatch = path.match(/^\/courses\/(\d+)$/); const page = routes.includes(path) || courseMatch ? path : '/404'; return <div className="app-shell"><Header user={user} onLogout={handleLogout} />{page === '/' && <HomePage courses={homeCourses} />}{page === '/courses' && <CoursesPage />}{courseMatch && <CoursePage courseId={Number(courseMatch[1])} user={user} />}{page === '/login' && <LoginPage onLogin={handleLogin} />}{page === '/register' && <RegisterPage onRegister={handleRegister} />}{page === '/profile' && <ProfilePage user={user} />}{page === '/about' && <AboutPage />}{page === '/404' && <NotFound />}<Footer /></div> }
+function ProfilePage({ user }: { user: User | null }) { const [courses, setCourses] = useState<Course[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const token = localStorage.getItem(TOKEN_KEY); useEffect(() => { if (!token) { setLoading(false); return } getEnrolledCourses(token).then(setCourses).catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить мои курсы')).finally(() => setLoading(false)) }, [token]); if (!user) return <main className="page"><div className="container empty-page"><span className="eyebrow">ПРОФИЛЬ</span><h1>Войдите в аккаунт</h1><p>Здесь будут отображаться ваши курсы и прогресс.</p><Link href="/login" className="button button-primary">Войти</Link></div></main>; return <main className="page"><div className="container"><div className="page-heading"><span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span><h1>Профиль</h1></div><div className="profile-layout"><section className="profile-card profile-summary"><div className="avatar">{user.username.slice(0, 1).toUpperCase()}</div><div><h2>{user.username}</h2><p>{user.email}</p></div></section><section className="profile-card"><div className="card-heading"><span className="eyebrow">ОБУЧЕНИЕ</span><h2>Мои курсы</h2></div>{loading && <div className="loading-screen">Загружаем курсы...</div>}{error && <div className="form-error">{error}</div>}{!loading && !error && courses.length === 0 && <div className="empty-state"><div className="empty-icon">📚</div><h3>Пока нет курсов</h3><p>Запишись на курс из каталога, и он появится здесь.</p><Link href="/courses" className="button button-primary">Перейти в каталог</Link></div>}{!loading && !error && courses.length > 0 && <CourseGrid items={courses} />}</section></div></div></main> }
+
+function AboutPage() { return <main className="page"><div className="container narrow"><div className="page-heading"><span className="eyebrow">ПРОЕКТ</span><h1>О Cringearium</h1><p>Небольшая образовательная платформа для курсов, практики и персонализированного обучения.</p></div><section className="about-card"><h2>Зачем это всё?</h2><p>Cringearium создаётся как современная учебная платформа с понятной структурой курсов, практическими заданиями и персональной помощью.</p><div className="about-stats"><div><strong>Go</strong><span>Backend</span></div><div><strong>React</strong><span>Frontend</span></div><div><strong>AI</strong><span>Следующий этап</span></div></div></section></div></main> }
+
+function App() { const path = usePath(); const [user, setUser] = useState<User | null>(null); const [authLoading, setAuthLoading] = useState(true); useEffect(() => { const token = localStorage.getItem(TOKEN_KEY); if (!token) { setAuthLoading(false); return } getMe(token).then(setUser).catch(() => { localStorage.removeItem(TOKEN_KEY); setUser(null) }).finally(() => setAuthLoading(false)) }, []); const handleLogin = async (email: string, password: string) => { const result = await login(email, password); localStorage.setItem(TOKEN_KEY, result.token); setUser(result.user); navigate('/profile') }; const handleLogout = () => { localStorage.removeItem(TOKEN_KEY); setUser(null); navigate('/') }; if (authLoading) return <div className="loading-screen">Загружаем...</div>; let page: ReactNode; if (path === '/') page = <HomePage courses={[]} />; else if (path === '/courses') page = <CoursesPage />; else if (path === '/about') page = <AboutPage />; else if (path === '/login') page = <LoginPage onLogin={handleLogin} />; else if (path === '/register') page = <RegisterPage />; else if (path === '/profile') page = <ProfilePage user={user} />; else { const match = path.match(/^\/courses\/(\d+)$/); page = match ? <CoursePage courseId={Number(match[1])} user={user} /> : <main className="page"><div className="container empty-page"><h1>404</h1><p>Страница не найдена.</p><Link href="/" className="button button-primary">На главную</Link></div></main> } return <div className="app-shell"><Header user={user} onLogout={handleLogout} />{page}<Footer /></div> }
+
 export default App
