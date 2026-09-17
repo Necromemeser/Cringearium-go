@@ -30,6 +30,7 @@ func main() {
 	mux.Handle("GET /api/courses", gateway.coursesProxy(false)); mux.Handle("GET /api/courses/{id}", gateway.coursesProxy(false))
 	mux.Handle("POST /api/courses/{id}/enroll", gateway.coursesProxy(true)); mux.Handle("GET /api/courses/{id}/access", gateway.coursesProxy(true))
 	mux.Handle("GET /api/users/me/courses", gateway.coursesProxy(true)); mux.Handle("GET /api/courses/{id}/progress", gateway.coursesProxy(true)); mux.Handle("POST /api/pages/{pageId}/complete", gateway.coursesProxy(true))
+	mux.Handle("GET /api/pages/{pageId}/test", gateway.coursesProxy(true)); mux.Handle("POST /api/tests/{testId}/attempts", gateway.coursesProxy(true))
 	server := &http.Server{Addr: envOrDefault("SERVER_ADDR", ":8080"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	serverErrors := make(chan error, 1)
 	go func() { log.Printf("Cringearium Gateway started on %s", server.Addr); if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { serverErrors <- err } }()
