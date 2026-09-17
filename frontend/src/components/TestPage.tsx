@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getTest, submitTest, type CourseTest, type TestAttemptAnswer, type TestResult } from '../api/courses'
+import { getTest, submitTest, type CourseTest, type TestResult } from '../api/courses'
 import './TestPage.css'
 
 type TestPageProps = {
@@ -59,6 +59,13 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
   const submittedByQuestion = useMemo(() => new Map((result?.answers ?? []).map((answer) => [answer.question_id, answer])), [result])
   const hasSubmittedAnswers = submittedByQuestion.size > 0
 
+  const handleAnswerChange = (questionId: number, answerId: number) => {
+    if (locked) return
+    setResult(null)
+    setError('')
+    setAnswers((current) => ({ ...current, [questionId]: answerId }))
+  }
+
   const handleSubmit = async () => {
     if (!test || !allAnswered || submitting || locked) return
     setSubmitting(true)
@@ -112,7 +119,7 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
               const stateClass = isCorrect ? 'correct' : isWrongSelected ? 'wrong' : ''
 
               return <label key={answer.id} className={`test-answer ${isSelected ? 'selected' : ''} ${stateClass} ${locked ? 'locked' : ''}`}>
-                <input type="radio" name={`question-${question.id}`} value={answer.id} checked={isSelected} disabled={locked || submitting} onChange={() => setAnswers((current) => ({ ...current, [question.id]: answer.id }))} />
+                <input type="radio" name={`question-${question.id}`} value={answer.id} checked={isSelected} disabled={locked || submitting} onChange={() => handleAnswerChange(question.id, answer.id)} />
                 <span className="test-answer-marker" />
                 <span>{answer.text}</span>
               </label>
