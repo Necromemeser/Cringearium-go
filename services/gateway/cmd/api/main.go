@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -67,7 +70,7 @@ func main() {
 	}()
 
 	shutdown := make(chan os.Signal, 1)
-	signalNotify(shutdown)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case err := <-serverErrors:
@@ -95,7 +98,7 @@ func (g *Gateway) authProxy() http.Handler {
 }
 
 func (g *Gateway) coursesProxy(protected bool) http.Handler {
-	proxy := g.reverseProxy(g.coursesURL, protected)
+	proxy := g.reverseProxy(g.coursesURL, true)
 	if !protected {
 		return proxy
 	}
@@ -137,7 +140,7 @@ func (g *Gateway) requireAuth(next http.Handler) http.Handler {
 		}
 
 		var user userResponse
-		if err := decodeJSON(resp.Body, &user); err != nil || user.ID <= 0 {
+		if err := json.NewDecoder(resp.Body).Decode(&user); err != nil || user.ID <= 0 {
 			http.Error(w, "authentication service error", http.StatusBadGateway)
 			return
 		}
