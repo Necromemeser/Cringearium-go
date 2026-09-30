@@ -437,9 +437,36 @@ func (s *AdaptiveTestService) generateFeedback(
 		})
 	}
 
+	results := make([]ports.RoundResultContext, 0, len(session.Rounds))
+	for _, round := range session.Rounds {
+		result := ports.RoundResultContext{
+			RoundNumber: round.RoundNumber,
+			TotalCount:  len(round.Questions),
+			Topics:      make([]ports.TopicResultContext, 0),
+		}
+		for _, answer := range round.Answers {
+			if answer.IsCorrect {
+				result.CorrectCount++
+			}
+			for _, question := range round.Questions {
+				if question.ID == answer.QuestionID {
+					result.Topics = append(result.Topics, ports.TopicResultContext{
+						TopicPageID: question.TopicPageID,
+						TopicTitle:  question.TopicTitle,
+						CorrectCount: boolToInt(answer.IsCorrect),
+						TotalCount:   1,
+					})
+					break
+				}
+			}
+		}
+		results = append(results, result)
+	}
+
 	generated, err := s.llm.GenerateFeedback(ctx, ports.GenerateFeedbackRequest{
 		CourseTitle:   course.CourseTitle,
 		Topics:        topics,
+		RoundResults:  results,
 		AllowedTopics: topicsToAllowed(course.AllowedTopics),
 	})
 	if err != nil {
@@ -449,8 +476,36 @@ func (s *AdaptiveTestService) generateFeedback(
 	return domain.AdaptiveFeedback{
 		SessionID:       session.ID,
 		Summary:         generated.Summary,
+		MasteredTopics:  generatedTopicsToDomain(generated.MasteredTopics),
+		TopicsToReview:  generatedTopicsToDomain(generated.TopicsToReview),
+		NextSteps:       generatedNextStepsToDomain(generated.NextSteps),
 		CreatedAt:       time.Now(),
 	}, nil
+}
+
+func generatedTopicsToDomain(items []ports.GeneratedTopicFeedback) []domain.TopicFeedback {
+	result := make([]domain.TopicFeedback, 0, len(items))
+	for _, item := range items {
+		result = append(result, domain.TopicFeedback{
+			Title: item.Title, TopicPageID: item.TopicPageID, Reason: item.Reason,
+		})
+	}
+	return result
+}
+
+func generatedNextStepsToDomain(items []ports.GeneratedNextStep) []domain.NextStep {
+	result := make([]domain.NextStep, 0, len(items))
+	for _, item := range items {
+		result = append(result, domain.NextStep{
+			Title: item.Title, Description: item.Description, TopicPageID: item.TopicPageID,
+		})
+	}
+	return result
+}
+
+func boolToInt(value bool) int {
+	if value { return 1 }
+	return 0
 }
 
 func topicsToAllowed(topics []ports.CourseTopic) []ports.AllowedTopic {
