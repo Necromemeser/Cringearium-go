@@ -164,7 +164,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 	}
 
 	if err := s.repository.CompleteRound(ctx, sessionID, roundID); err != nil {
-		return domain.AdaptiveSession{}, fmt.Errorf("complete round: %w", err)
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("complete round: %w", err))
 	}
 
 	for i := range session.Rounds {
@@ -188,7 +188,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		}
 
 		if err := s.repository.CompleteSession(ctx, sessionID, feedback); err != nil {
-			return domain.AdaptiveSession{}, fmt.Errorf("complete session: %w", err)
+			return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("complete session: %w", err))
 		}
 
 		session.Status = domain.SessionCompleted
@@ -221,7 +221,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 
 	generated, metadata, err := s.llm.GenerateRound(ctx, request)
 	if err != nil {
-		return domain.AdaptiveSession{}, fmt.Errorf("generate second round: %w", err)
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("generate second round: %w", err))
 	}
 
 	if err := validateGeneratedRound(generated, topicsToAllowed(courseContext.AllowedTopics), session.QuestionCount); err != nil {
