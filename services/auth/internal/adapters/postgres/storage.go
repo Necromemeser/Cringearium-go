@@ -15,10 +15,11 @@ type DB struct {
 func New(log *slog.Logger, address string) (*DB, error) {
 	db, err := sqlx.Connect("pgx", address)
 	if err != nil {
-		log.Error("connection problem", "address", address, "error", err)
+		log.Error("database connection failed", "error", err)
 		return nil, err
 	}
 
+	log.Info("database connection established")
 	return &DB{
 		log:  log,
 		conn: db,
@@ -28,5 +29,7 @@ func New(log *slog.Logger, address string) (*DB, error) {
 func (db *DB) Close() {
 	if err := db.conn.Close(); err != nil {
 		db.log.Error("failed to close database", "error", err)
+		return
 	}
+	db.log.Info("database connection closed")
 }
