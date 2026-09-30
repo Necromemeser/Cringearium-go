@@ -79,6 +79,8 @@ func (s *AdaptiveTestService) CreateSession(
 
 	sessionID := newSessionID()
 
+	now := time.Now()
+
 	session := domain.AdaptiveSession{
 		ID:              sessionID,
 		UserID:          userID,
@@ -87,6 +89,7 @@ func (s *AdaptiveTestService) CreateSession(
 		Status:          domain.SessionInProgress,
 		CurrentRound:    1,
 		QuestionCount:   questionCount,
+		CreatedAt:       now,
 	}
 
 	round := generatedRoundToDomain(
