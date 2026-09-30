@@ -103,8 +103,17 @@ jobs:
           docker compose logs
           exit 1
 
-      - name: Check frontend
-        run: curl --fail --silent http://localhost:3000 > /dev/null
+      - name: Wait for frontend
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:3000 > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs frontend
+          exit 1
 
       - name: Show logs on failure
         if: failure()
