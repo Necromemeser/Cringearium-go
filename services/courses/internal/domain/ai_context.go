@@ -29,6 +29,8 @@ type AIContextQuestion struct {
 
 type AIContextResult struct {
 	TestID       int64
+	PageID       int64
+	Title        string
 	CorrectCount int
 	TotalCount   int
 }
