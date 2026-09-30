@@ -8,6 +8,7 @@ import (
  "encoding/json"
  "fmt"
  "io"
+ "log/slog"
  "net/http"
  "strings"
  "time"
@@ -18,14 +19,15 @@ import (
 const promptVersion = "adaptive-v1"
 
 type Client struct {
+ logger *slog.Logger
  baseURL string
  apiKey string
  model string
  http *http.Client
 }
 
-func NewClient(baseURL, apiKey, model string) *Client {
- return &Client{baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, model: model, http: &http.Client{Timeout: 90 * time.Second}}
+func NewClient(logger *slog.Logger, baseURL, apiKey, model string) *Client {
+ return &Client{logger: logger,baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, model: model, http: &http.Client{Timeout: 90 * time.Second}}
 }
 
 func (c *Client) GenerateRound(ctx context.Context, in ports.GenerateRoundRequest) (ports.GeneratedRound, ports.GenerationMetadata, error) {
@@ -48,6 +50,8 @@ func (c *Client) GenerateFeedback(ctx context.Context, in ports.GenerateFeedback
 }
 
 func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *int, error) {
+ start := time.Now()
+ c.logger.Info("sending llm request", "model", c.model)
  payload := map[string]any{"model":c.model,"messages":[]map[string]string{{"role":"system","content":"Generate educational adaptive tests. Return only valid JSON."},{"role":"user","content":prompt}},"temperature":0.2,"response_format":map[string]string{"type":"json_object"}}
  body, err := json.Marshal(payload)
  if err != nil { return "", nil, nil, err }
@@ -56,11 +60,17 @@ func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *in
  req.Header.Set("Content-Type","application/json")
  if c.apiKey != "" { req.Header.Set("Authorization","Bearer "+c.apiKey) }
  resp, err := c.http.Do(req)
- if err != nil { return "", nil, nil, fmt.Errorf("llm request: %w", err) }
+ if err != nil {
+  c.logger.Error("llm request failed", "model", c.model, "duration_ms", time.Since(start).Milliseconds(), "error", err)
+  return "", nil, nil, fmt.Errorf("llm request: %w", err)
+ }
  defer resp.Body.Close()
  data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
  if err != nil { return "", nil, nil, err }
- if resp.StatusCode < 200 || resp.StatusCode >= 300 { return "", nil, nil, fmt.Errorf("llm returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data))) }
+ if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+  c.logger.Error("llm returned non-success status", "model", c.model, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds())
+  return "", nil, nil, fmt.Errorf("llm returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+ }
  var envelope struct {
  Choices []struct { Message struct { Content string "json:\"content\"" } "json:\"message\"" } "json:\"choices\""
  Usage struct { PromptTokens int "json:\"prompt_tokens\""; CompletionTokens int "json:\"completion_tokens\"" } "json:\"usage\""
@@ -69,6 +79,7 @@ func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *in
  if len(envelope.Choices) == 0 || strings.TrimSpace(envelope.Choices[0].Message.Content) == "" { return "", nil, nil, fmt.Errorf("llm returned no content") }
  inputTokens := envelope.Usage.PromptTokens
  outputTokens := envelope.Usage.CompletionTokens
+ c.logger.Info("llm request completed", "model", c.model, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds(), "input_tokens", inputTokens, "output_tokens", outputTokens)
  return strings.TrimSpace(envelope.Choices[0].Message.Content), &inputTokens, &outputTokens, nil
 }
 
