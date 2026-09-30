@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -11,11 +12,12 @@ import (
 )
 
 type Handler struct {
+	logger  *slog.Logger
 	service *application.AdaptiveTestService
 }
 
-func NewHandler(service *application.AdaptiveTestService) *Handler {
-	return &Handler{service: service}
+func NewHandler(logger *slog.Logger, service *application.AdaptiveTestService) *Handler {
+	return &Handler{logger: logger, service: service}
 }
 
 type createSessionRequest struct {
@@ -30,37 +32,37 @@ type submitAnswersRequest struct {
 }
 
 type sessionResponse struct {
-	ID           string           `json:"id"`
-	CourseID     int64            `json:"course_id"`
-	TopicPageID  *int64           `json:"topic_page_id,omitempty"`
-	Status       domain.SessionStatus `json:"status"`
-	CurrentRound int              `json:"current_round"`
-	QuestionCount int             `json:"question_count"`
-	Rounds       []roundResponse  `json:"rounds"`
-	Feedback     *feedbackResponse `json:"feedback,omitempty"`
+	ID            string            `json:"id"`
+	CourseID      int64             `json:"course_id"`
+	TopicPageID   *int64            `json:"topic_page_id,omitempty"`
+	Status        domain.SessionStatus `json:"status"`
+	CurrentRound  int               `json:"current_round"`
+	QuestionCount int               `json:"question_count"`
+	Rounds        []roundResponse    `json:"rounds"`
+	Feedback      *feedbackResponse  `json:"feedback,omitempty"`
 }
 
 type roundResponse struct {
-	ID           int64              `json:"id"`
-	RoundNumber  int                `json:"round_number"`
+	ID           int64                `json:"id"`
+	RoundNumber  int                  `json:"round_number"`
 	Strategy     domain.RoundStrategy `json:"strategy"`
-	Status       domain.RoundStatus `json:"status"`
-	Title        string             `json:"title"`
-	Instructions string             `json:"instructions,omitempty"`
-	Questions    []questionResponse `json:"questions"`
+	Status       domain.RoundStatus   `json:"status"`
+	Title        string               `json:"title"`
+	Instructions string               `json:"instructions,omitempty"`
+	Questions    []questionResponse   `json:"questions"`
 }
 
 type questionResponse struct {
-	ID             int64                    `json:"id"`
-	Position       int                      `json:"position"`
-	TopicPageID    *int64                   `json:"topic_page_id,omitempty"`
-	TopicTitle     string                   `json:"topic_title,omitempty"`
-	Question       string                   `json:"question"`
-	Difficulty     int                      `json:"difficulty"`
-	KnowledgeBasis domain.KnowledgeBasis   `json:"knowledge_basis"`
+	ID             int                    `json:"id"`
+	Position       int                    `json:"position"`
+	TopicPageID    *int64                 `json:"topic_page_id,omitempty"`
+	TopicTitle     string                 `json:"topic_title,omitempty"`
+	Question       string                 `json:"question"`
+	Difficulty     int                    `json:"difficulty"`
+	KnowledgeBasis domain.KnowledgeBasis `json:"knowledge_basis"`
 	Sources        []domain.QuestionSource `json:"sources,omitempty"`
-	Explanation    string                   `json:"explanation,omitempty"`
-	Options        []optionResponse         `json:"options"`
+	Explanation    string                 `json:"explanation,omitempty"`
+	Options        []optionResponse       `json:"options"`
 }
 
 type optionResponse struct {
@@ -79,15 +81,24 @@ type feedbackResponse struct {
 func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromHeader(r)
 	if err != nil {
+		h.logger.Warn("create adaptive session unauthorized", "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	var request createSessionRequest
 	if err := decodeJSON(r, &request); err != nil {
+		h.logger.Warn("create adaptive session invalid body", "error", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+
+	h.logger.Info("creating adaptive session",
+		"user_id", userID,
+		"course_id", request.CourseID,
+		"topic_page_id", request.TopicPageID,
+		"question_count", request.QuestionCount,
+	)
 
 	session, err := h.service.CreateSession(
 		r.Context(),
@@ -97,6 +108,11 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		request.QuestionCount,
 	)
 	if err != nil {
+		h.logger.Error("failed to create adaptive session",
+			"user_id", userID,
+			"course_id", request.CourseID,
+			"error", err,
+		)
 		switch {
 		case errors.Is(err, application.ErrInvalidQuestionCount):
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -108,12 +124,14 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("adaptive session created", "session_id", session.ID, "user_id", userID)
 	writeJSON(w, http.StatusCreated, toSessionResponse(session))
 }
 
 func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromHeader(r)
 	if err != nil {
+		h.logger.Warn("get adaptive session unauthorized", "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -126,6 +144,11 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.service.GetSession(r.Context(), userID, sessionID)
 	if err != nil {
+		h.logger.Error("failed to get adaptive session",
+			"session_id", sessionID,
+			"user_id", userID,
+			"error", err,
+		)
 		if errors.Is(err, application.ErrRoundNotFound) {
 			http.Error(w, "session not found", http.StatusNotFound)
 			return
@@ -140,6 +163,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SubmitAnswers(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromHeader(r)
 	if err != nil {
+		h.logger.Warn("submit adaptive answers unauthorized", "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -152,6 +176,7 @@ func (h *Handler) SubmitAnswers(w http.ResponseWriter, r *http.Request) {
 
 	var request submitAnswersRequest
 	if err := decodeJSON(r, &request); err != nil {
+		h.logger.Warn("submit adaptive answers invalid body", "session_id", sessionID, "error", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -160,11 +185,22 @@ func (h *Handler) SubmitAnswers(w http.ResponseWriter, r *http.Request) {
 	for questionID, optionKey := range request.Answers {
 		id, err := strconv.ParseInt(questionID, 10, 64)
 		if err != nil || id <= 0 || optionKey == "" {
+			h.logger.Warn("submit adaptive answers invalid answer",
+				"session_id", sessionID,
+				"question_id", questionID,
+			)
 			http.Error(w, "invalid answers", http.StatusBadRequest)
 			return
 		}
 		answers[id] = optionKey
 	}
+
+	h.logger.Info("submitting adaptive answers",
+		"session_id", sessionID,
+		"user_id", userID,
+		"round_id", request.RoundID,
+		"answer_count", len(answers),
+	)
 
 	session, err := h.service.SubmitAnswers(
 		r.Context(),
@@ -174,6 +210,12 @@ func (h *Handler) SubmitAnswers(w http.ResponseWriter, r *http.Request) {
 		answers,
 	)
 	if err != nil {
+		h.logger.Error("failed to submit adaptive answers",
+			"session_id", sessionID,
+			"user_id", userID,
+			"round_id", request.RoundID,
+			"error", err,
+		)
 		switch {
 		case errors.Is(err, application.ErrSessionNotInProgress):
 			http.Error(w, "session is not in progress", http.StatusConflict)
@@ -277,7 +319,6 @@ func userIDFromHeader(r *http.Request) (int64, error) {
 
 	return id, nil
 }
-
 
 func explanationForRound(status domain.RoundStatus, explanation string) string {
 	if status != domain.RoundCompleted {
