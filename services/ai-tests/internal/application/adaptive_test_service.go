@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"crypto/rand"
+	"encoding/hex"
+	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
@@ -146,7 +149,12 @@ func (s *AdaptiveTestService) SubmitAnswers(
 	}
 
 	if round.RoundNumber == maxRounds {
-		feedback, err := s.generateFeedback(ctx, courseContextForFeedback(session), session)
+		courseContext, err := s.courses.GetAIContext(ctx, userID, session.CourseID, session.TopicPageID)
+		if err != nil {
+			return domain.AdaptiveSession{}, fmt.Errorf("get course context for feedback: %w", err)
+		}
+
+		feedback, err := s.generateFeedback(ctx, courseContext, session)
 		if err != nil {
 			return domain.AdaptiveSession{}, fmt.Errorf("generate feedback: %w", err)
 		}
@@ -451,10 +459,10 @@ func topicsToAllowed(topics []ports.CourseTopic) []ports.AllowedTopic {
 	return result
 }
 
-func courseContextForFeedback(session domain.AdaptiveSession) ports.CourseContext {
-	return ports.CourseContext{CourseID: session.CourseID}
-}
-
 func newSessionID() string {
-	return fmt.Sprintf("%d", 0)
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		panic("failed to generate session id")
+	}
+	return hex.EncodeToString(buf)
 }
