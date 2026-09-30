@@ -5,6 +5,7 @@ import { TOKEN_KEY } from '../constants/auth'
 import Link from '../components/common/Link'
 import Markdown from '../components/markdown/Markdown'
 import TestPage from '../components/tests/TestPage'
+import AdaptiveTestPage from '../components/tests/AdaptiveTestPage'
 import { navigate } from '../utils/navigation'
 export default function CoursePage({ courseId, user }: { courseId: number; user: User | null }) {
   const [course, setCourse] = useState<CourseDetails | null>(null)
@@ -404,19 +405,12 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
                     }
                   />
                 ) : (
-                  <div className="lesson-placeholder">
-                    <div className="placeholder-icon">
-                      ✦
-                    </div>
-
-                    <h3>Персональный AI-тест</h3>
-
-                    <p>
-                      AI-тест будет формироваться на
-                      основе твоего прогресса и
-                      результатов обучения.
-                    </p>
-                  </div>
+                  <AdaptiveTestPage
+                    courseId={course.id}
+                    topicPageId={currentPage.id}
+                    token={token || ''}
+                    onCompleted={() => handleTestPassed(currentPage.id)}
+                  />
                 )}
 
                 {currentPage.type === 'test' ? null : currentPage.type === 'theory' ? (
