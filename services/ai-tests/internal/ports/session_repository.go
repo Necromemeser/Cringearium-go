@@ -21,7 +21,7 @@ type SessionRepository interface {
 	SaveRound(
 		ctx context.Context,
 		round domain.AdaptiveRound,
-	) error
+	) (domain.AdaptiveRound, error)
 
 	SaveAnswers(
 		ctx context.Context,
