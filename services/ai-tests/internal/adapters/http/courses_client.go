@@ -23,7 +23,7 @@ func NewCoursesClient(baseURL string) *CoursesClient {
 	}
 }
 
-func (c *CoursesClient) GetAIContext(
+func (c *CoursesClient) GetCourseContext(
 	ctx context.Context,
 	userID int64,
 	courseID int64,
@@ -72,38 +72,50 @@ func (c *CoursesClient) GetAIContext(
 
 	for _, material := range payload.Materials {
 		result.Materials = append(result.Materials, ports.CourseMaterial{
-			PageID: material.PageID, Title: material.Title, Content: material.Content,
+			PageID: material.PageID,
+			Title: material.Title,
+			Content: material.Content,
 		})
 	}
 
 	for _, test := range payload.OrdinaryTests {
 		item := ports.OrdinaryTest{
-			ID: test.ID, PageID: test.PageID, Title: test.Title,
+			ID: test.ID,
+			PageID: test.PageID,
+			Title: test.Title,
 			Questions: make([]ports.OrdinaryTestQuestion, 0, len(test.Questions)),
 		}
 		for _, question := range test.Questions {
 			item.Questions = append(item.Questions, ports.OrdinaryTestQuestion{
-				Question: question.Question, Options: question.Options,
+				Question: question.Question,
+				Options: question.Options,
 			})
 		}
 		result.OrdinaryTests = append(result.OrdinaryTests, item)
 	}
 
 	for _, item := range payload.TestResults {
+		var topicPageID *int64
+		if item.PageID > 0 {
+			topicPageID = &item.PageID
+		}
 		result.TestResults = append(result.TestResults, ports.OrdinaryTestResult{
-			TestID: item.TestID, TopicPageID: ptrInt64(item.PageID), TopicTitle: item.Title, CorrectCount: item.CorrectCount, TotalCount: item.TotalCount,
+			TestID: item.TestID,
+			TopicPageID: topicPageID,
+			TopicTitle: item.Title,
+			CorrectCount: item.CorrectCount,
+			TotalCount: item.TotalCount,
 		})
 	}
 
 	for _, topic := range payload.AllowedTopics {
 		result.AllowedTopics = append(result.AllowedTopics, ports.CourseTopic{
-			PageID: topic.PageID, Title: topic.Title,
+			PageID: topic.PageID,
+			Title: topic.Title,
 		})
 	}
 
 	return result, nil
 }
-
-func ptrInt64(value int64) *int64 { return &value }
 
 var _ ports.CourseClient = (*CoursesClient)(nil)
