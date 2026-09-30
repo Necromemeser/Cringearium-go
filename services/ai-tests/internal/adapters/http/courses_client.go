@@ -11,6 +11,46 @@ import (
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
 )
 
+type aiContextResponse struct {
+	CourseID      int64             `json:"course_id"`
+	CourseTitle   string            `json:"course_title"`
+	Materials     []aiContextMaterial `json:"materials"`
+	OrdinaryTests []aiContextTest  `json:"ordinary_tests"`
+	TestResults   []aiContextResult `json:"test_results"`
+	AllowedTopics []aiContextTopic `json:"allowed_topics"`
+}
+
+type aiContextMaterial struct {
+	PageID  int64  `json:"page_id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type aiContextTest struct {
+	ID        int64               `json:"id"`
+	PageID    int64               `json:"page_id"`
+	Title     string              `json:"title"`
+	Questions []aiContextQuestion `json:"questions"`
+}
+
+type aiContextQuestion struct {
+	Question string   `json:"question"`
+	Options  []string `json:"options"`
+}
+
+type aiContextResult struct {
+	TestID       int64  `json:"test_id"`
+	PageID       int64  `json:"page_id"`
+	Title        string `json:"title"`
+	CorrectCount int    `json:"correct_count"`
+	TotalCount   int    `json:"total_count"`
+}
+
+type aiContextTopic struct {
+	PageID int64  `json:"page_id"`
+	Title  string `json:"title"`
+}
+
 type CoursesClient struct {
 	baseURL string
 	client  *http.Client
