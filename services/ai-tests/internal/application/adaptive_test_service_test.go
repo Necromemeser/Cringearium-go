@@ -604,3 +604,8 @@ func TestBuildRoundRequestIncludesCourseContext(t *testing.T) {
 		t.Fatalf("round metadata = %d/%q", request.RoundNumber, request.Strategy)
 	}
 }
+
+
+func int64Ptr(v int64) *int64 {
+	return &v
+}
