@@ -28,6 +28,7 @@ type CourseMaterial struct {
 
 type OrdinaryTest struct {
 	ID        int64
+	PageID    int64
 	Title     string
 	Questions []OrdinaryTestQuestion
 }
@@ -39,6 +40,8 @@ type OrdinaryTestQuestion struct {
 
 type OrdinaryTestResult struct {
 	TestID       int64
+	TopicPageID  *int64
+	TopicTitle   string
 	CorrectCount int
 	TotalCount   int
 }
