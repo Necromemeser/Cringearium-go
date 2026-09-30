@@ -343,13 +343,7 @@ func generatedRoundToDomain(
 			})
 		}
 
-		sources := make([]domain.QuestionSource, 0, len(question.Sources))
-		for _, source := range question.Sources {
-			sources = append(sources, domain.QuestionSource{
-				Title: source.Title,
-				URL:   source.URL,
-			})
-		}
+		sources := make([]domain.QuestionSource, 0)
 
 		questions = append(questions, domain.AdaptiveQuestion{
 			RoundID:          0,
