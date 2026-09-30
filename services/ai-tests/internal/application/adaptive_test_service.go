@@ -149,6 +149,10 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		return domain.AdaptiveSession{}, ErrSessionNotInProgress
 	}
 
+	if len(answers) != len(round.Questions) {
+		return domain.AdaptiveSession{}, ErrInvalidAnswer
+	}
+
 	domainAnswers, result := evaluateAnswers(sessionID, round, answers)
 
 	if len(domainAnswers) != len(round.Questions) {
