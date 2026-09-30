@@ -179,12 +179,12 @@ func (s *AdaptiveTestService) SubmitAnswers(
 	if round.RoundNumber == maxRounds {
 		courseContext, err := s.courses.GetCourseContext(ctx, userID, session.CourseID, session.TopicPageID)
 		if err != nil {
-			return domain.AdaptiveSession{}, fmt.Errorf("get course context for feedback: %w", err)
+			return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("get course context for feedback: %w", err))
 		}
 
 		feedback, err := s.generateFeedback(ctx, courseContext, session)
 		if err != nil {
-			return domain.AdaptiveSession{}, fmt.Errorf("generate feedback: %w", err)
+			return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("generate feedback: %w", err))
 		}
 
 		if err := s.repository.CompleteSession(ctx, sessionID, feedback); err != nil {
@@ -203,7 +203,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 
 	courseContext, err := s.courses.GetCourseContext(ctx, userID, session.CourseID, session.TopicPageID)
 	if err != nil {
-		return domain.AdaptiveSession{}, fmt.Errorf("get course context for second round: %w", err)
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("get course context for second round: %w", err))
 	}
 
 	request := buildRoundRequest(
@@ -225,7 +225,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 	}
 
 	if err := validateGeneratedRound(generated, topicsToAllowed(courseContext.AllowedTopics), session.QuestionCount); err != nil {
-		return domain.AdaptiveSession{}, err
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, err)
 	}
 
 	round2 := generatedRoundToDomain(
@@ -238,12 +238,19 @@ func (s *AdaptiveTestService) SubmitAnswers(
 
 	savedRound2, err := s.repository.SaveRound(ctx, round2)
 	if err != nil {
-		return domain.AdaptiveSession{}, fmt.Errorf("save second round: %w", err)
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("save second round: %w", err))
 	}
 
 	session.CurrentRound = 2
 	session.Rounds = append(session.Rounds, savedRound2)
 	return session, nil
+}
+
+func (s *AdaptiveTestService) failAfterProcessing(ctx context.Context, sessionID string, err error) error {
+	if failErr := s.repository.FailSession(ctx, sessionID); failErr != nil {
+		return fmt.Errorf("%w; fail session: %v", err, failErr)
+	}
+	return err
 }
 
 type roundResult struct {
