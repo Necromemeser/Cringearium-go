@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getTest, submitTest, type CourseTest, type TestResult } from '../api/courses'
+import { getTest, submitTest, type CourseTest, type TestResult } from '../../api/courses'
 import './TestPage.css'
 
 type TestPageProps = {
@@ -233,8 +233,6 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
                 {orderedAnswers.map((answer) => {
                   const isSelected = selectedAnswer === answer.id
 
-                  // Подсвечиваем только выбранный пользователем ответ.
-                  // Правильный ответ при ошибке намеренно НЕ показываем.
                   const isCorrect =
                     hasSubmittedAnswers &&
                     isSelected &&
