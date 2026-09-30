@@ -285,20 +285,42 @@ func buildRoundRequest(
 
 	topics := make([]ports.AllowedTopic, 0, len(c.AllowedTopics))
 	for _, topic := range c.AllowedTopics {
-		topics = append(topics, ports.AllowedTopic{
-			PageID: topic.PageID,
-			Title: topic.Title,
+		topics = append(topics, ports.AllowedTopic{PageID: topic.PageID, Title: topic.Title})
+	}
+
+	tests := make([]ports.OrdinaryTestContext, 0, len(c.OrdinaryTests))
+	for _, test := range c.OrdinaryTests {
+		item := ports.OrdinaryTestContext{
+			TestID: test.ID,
+			Title: test.Title,
+			Questions: make([]ports.OrdinaryQuestionContext, 0, len(test.Questions)),
+		}
+		for _, question := range test.Questions {
+			item.Questions = append(item.Questions, ports.OrdinaryQuestionContext{
+				Question: question.Question,
+				Options: question.Options,
+			})
+		}
+		tests = append(tests, item)
+	}
+
+	results := make([]ports.PreviousResultContext, 0, len(c.TestResults))
+	for _, result := range c.TestResults {
+		results = append(results, ports.PreviousResultContext{
+			CorrectCount: result.CorrectCount,
+			TotalCount: result.TotalCount,
 		})
 	}
 
 	return ports.GenerateRoundRequest{
-		CourseTitle:     c.CourseTitle,
-		Materials:       materials,
-		QuestionCount:   questionCount,
-		RoundNumber:     roundNumber,
-		Strategy:        string(strategy),
-		AllowedTopics:   topics,
-		PreviousResults: previous,
+		CourseTitle: c.CourseTitle,
+		Materials: materials,
+		OrdinaryTests: tests,
+		QuestionCount: questionCount,
+		RoundNumber: roundNumber,
+		Strategy: string(strategy),
+		AllowedTopics: topics,
+		PreviousResults: append(results, previous...),
 	}
 }
 
