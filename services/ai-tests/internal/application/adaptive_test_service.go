@@ -149,7 +149,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		return domain.AdaptiveSession{}, ErrSessionNotInProgress
 	}
 
-	if len(answers) != len(round.Questions) {
+	if len(answers) != len(round.Questions) || !answersMatchQuestions(round, answers) {
 		return domain.AdaptiveSession{}, ErrInvalidAnswer
 	}
 
@@ -256,6 +256,28 @@ func (s *AdaptiveTestService) failAfterProcessing(ctx context.Context, sessionID
 type roundResult struct {
 	CorrectCount int
 	TotalCount   int
+}
+
+func answersMatchQuestions(round domain.AdaptiveRound, answers map[int64]string) bool {
+	for _, question := range round.Questions {
+		selected, ok := answers[question.ID]
+		if !ok || selected == "" {
+			return false
+		}
+
+		foundOption := false
+		for _, option := range question.Options {
+			if option.Key == selected {
+				foundOption = true
+				break
+			}
+		}
+		if !foundOption {
+			return false
+		}
+	}
+
+	return true
 }
 
 func evaluateAnswers(
