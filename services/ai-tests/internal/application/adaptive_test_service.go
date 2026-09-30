@@ -101,11 +101,12 @@ func (s *AdaptiveTestService) CreateSession(
 		return domain.AdaptiveSession{}, fmt.Errorf("create session: %w", err)
 	}
 
-	if err := s.repository.SaveRound(ctx, round); err != nil {
+	savedRound, err := s.repository.SaveRound(ctx, round)
+	if err != nil {
 		return domain.AdaptiveSession{}, fmt.Errorf("save first round: %w", err)
 	}
 
-	session.Rounds = []domain.AdaptiveRound{round}
+	session.Rounds = []domain.AdaptiveRound{savedRound}
 	return session, nil
 }
 
@@ -208,12 +209,13 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		strategy,
 	)
 
-	if err := s.repository.SaveRound(ctx, round2); err != nil {
+	savedRound2, err := s.repository.SaveRound(ctx, round2)
+	if err != nil {
 		return domain.AdaptiveSession{}, fmt.Errorf("save second round: %w", err)
 	}
 
 	session.CurrentRound = 2
-	session.Rounds = append(session.Rounds, round2)
+	session.Rounds = append(session.Rounds, savedRound2)
 	return session, nil
 }
 
