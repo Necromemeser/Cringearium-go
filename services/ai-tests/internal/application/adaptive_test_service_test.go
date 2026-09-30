@@ -80,6 +80,15 @@ func (r *sessionRepositoryMock) CompleteRound(_ context.Context, sessionID strin
 	return errors.New("round not found")
 }
 
+func (r *sessionRepositoryMock) FailSession(_ context.Context, sessionID string) error {
+	session := r.sessions[sessionID]
+	session.Status = domain.SessionFailed
+	now := time.Now()
+	session.CompletedAt = &now
+	r.sessions[sessionID] = session
+	return nil
+}
+
 func (r *sessionRepositoryMock) CompleteSession(_ context.Context, sessionID string, feedback domain.AdaptiveFeedback) error {
 	session := r.sessions[sessionID]
 	session.Status = domain.SessionCompleted
@@ -492,6 +501,83 @@ func TestCreateSessionPropagatesLLMError(t *testing.T) {
 	}
 	if len(repository.sessions) != 0 {
 		t.Fatalf("sessions = %d, want 0", len(repository.sessions))
+	}
+}
+
+func TestSubmitAnswersFailsSessionWhenSecondRoundGenerationFails(t *testing.T) {
+	repository := newSessionRepositoryMock()
+	courses := &courseClientMock{context: testCourseContext()}
+	expected := errors.New("llm unavailable")
+	llm := &llmClientMock{
+		rounds:   []ports.GeneratedRound{generatedRound(3, 10)},
+		roundErr: expected,
+	}
+	service := NewAdaptiveTestService(repository, courses, llm)
+
+	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	answers := map[int64]string{}
+	for _, question := range session.Rounds[0].Questions {
+		answers[question.ID] = "A"
+	}
+
+	_, err = service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[0].ID, answers)
+	if !errors.Is(err, expected) {
+		t.Fatalf("error = %v, want wrapped LLM error", err)
+	}
+
+	failed, err := repository.GetSession(context.Background(), session.ID, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Status != domain.SessionFailed {
+		t.Fatalf("status = %q, want %q", failed.Status, domain.SessionFailed)
+	}
+}
+
+func TestSubmitAnswersFailsSessionWhenFeedbackGenerationFails(t *testing.T) {
+	repository := newSessionRepositoryMock()
+	courses := &courseClientMock{context: testCourseContext()}
+	expected := errors.New("feedback unavailable")
+	llm := &llmClientMock{
+		rounds:      []ports.GeneratedRound{generatedRound(3, 10), generatedRound(3, 11)},
+		feedbackErr: expected,
+	}
+	service := NewAdaptiveTestService(repository, courses, llm)
+
+	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstAnswers := map[int64]string{}
+	for _, question := range session.Rounds[0].Questions {
+		firstAnswers[question.ID] = "A"
+	}
+	session, err = service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[0].ID, firstAnswers)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secondAnswers := map[int64]string{}
+	for _, question := range session.Rounds[1].Questions {
+		secondAnswers[question.ID] = "A"
+	}
+
+	_, err = service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[1].ID, secondAnswers)
+	if !errors.Is(err, expected) {
+		t.Fatalf("error = %v, want wrapped feedback error", err)
+	}
+
+	failed, err := repository.GetSession(context.Background(), session.ID, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Status != domain.SessionFailed {
+		t.Fatalf("status = %q, want %q", failed.Status, domain.SessionFailed)
 	}
 }
 
