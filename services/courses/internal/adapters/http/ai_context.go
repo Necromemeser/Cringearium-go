@@ -38,6 +38,8 @@ type aiContextQuestion struct {
 
 type aiContextResult struct {
 	TestID       int64 `json:"test_id"`
+	PageID       int64 `json:"page_id"`
+	Title        string `json:"title"`
 	CorrectCount int   `json:"correct_count"`
 	TotalCount   int   `json:"total_count"`
 }
