@@ -1,3 +1,9 @@
+import { useState } from 'react'
+import type { FormEvent } from 'react'
+import { login, register } from '../api/auth'
+import { TOKEN_KEY } from '../constants/auth'
+import { navigate } from '../utils/navigation'
+
 export default function RegisterPage() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
