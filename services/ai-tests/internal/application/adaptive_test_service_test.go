@@ -415,6 +415,29 @@ func TestSubmitAnswersRejectsInvalidAnswerCount(t *testing.T) {
 	}
 }
 
+func TestSubmitAnswersRejectsUnknownOption(t *testing.T) {
+	repository := newSessionRepositoryMock()
+	courses := &courseClientMock{context: testCourseContext()}
+	llm := &llmClientMock{rounds: []ports.GeneratedRound{generatedRound(3, 10)}}
+	service := NewAdaptiveTestService(repository, courses, llm)
+
+	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	answers := map[int64]string{}
+	for _, question := range session.Rounds[0].Questions {
+		answers[question.ID] = "A"
+	}
+	answers[session.Rounds[0].Questions[0].ID] = "UNKNOWN"
+
+	_, err = service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[0].ID, answers)
+	if !errors.Is(err, ErrInvalidAnswer) {
+		t.Fatalf("error = %v, want ErrInvalidAnswer", err)
+	}
+}
+
 func TestSubmitAnswersRejectsUnknownRound(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
