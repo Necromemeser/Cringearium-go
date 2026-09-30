@@ -55,7 +55,7 @@ func (s *AdaptiveTestService) CreateSession(
 		return domain.AdaptiveSession{}, ErrInvalidQuestionCount
 	}
 
-	courseContext, err := s.courses.GetAIContext(ctx, userID, courseID, topicPageID)
+	courseContext, err := s.courses.GetCourseContext(ctx, userID, courseID, topicPageID)
 	if err != nil {
 		return domain.AdaptiveSession{}, fmt.Errorf("get course context: %w", err)
 	}
@@ -177,7 +177,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 	}
 
 	if round.RoundNumber == maxRounds {
-		courseContext, err := s.courses.GetAIContext(ctx, userID, session.CourseID, session.TopicPageID)
+		courseContext, err := s.courses.GetCourseContext(ctx, userID, session.CourseID, session.TopicPageID)
 		if err != nil {
 			return domain.AdaptiveSession{}, fmt.Errorf("get course context for feedback: %w", err)
 		}
@@ -201,7 +201,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		strategy = domain.StrategyIncreaseDifficulty
 	}
 
-	courseContext, err := s.courses.GetAIContext(ctx, userID, session.CourseID, session.TopicPageID)
+	courseContext, err := s.courses.GetCourseContext(ctx, userID, session.CourseID, session.TopicPageID)
 	if err != nil {
 		return domain.AdaptiveSession{}, fmt.Errorf("get course context for second round: %w", err)
 	}
