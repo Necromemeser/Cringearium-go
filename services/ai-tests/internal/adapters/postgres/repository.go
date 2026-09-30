@@ -110,6 +110,14 @@ func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) 
 
 	round.ID = roundID
 
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE adaptive_sessions
+		SET current_round = $2
+		WHERE id = $1 AND status = 'in_progress'
+	`, round.SessionID, round.RoundNumber); err != nil {
+		return domain.AdaptiveRound{}, err
+	}
+
 	for i := range round.Questions {
 		question := &round.Questions[i]
 
