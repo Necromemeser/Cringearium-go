@@ -50,6 +50,7 @@ func (r *sessionRepositoryMock) SaveRound(_ context.Context, round domain.Adapti
 
 	session := r.sessions[round.SessionID]
 	session.Rounds = append(session.Rounds, round)
+	session.CurrentRound = round.RoundNumber
 	r.sessions[round.SessionID] = session
 	return round, nil
 }
@@ -119,11 +120,19 @@ type llmClientMock struct {
 	roundCalls    []ports.GenerateRoundRequest
 	feedbackCalls []ports.GenerateFeedbackRequest
 	roundErr      error
+	roundErrs     []error
 	feedbackErr   error
 }
 
 func (l *llmClientMock) GenerateRound(_ context.Context, request ports.GenerateRoundRequest) (ports.GeneratedRound, ports.GenerationMetadata, error) {
 	l.roundCalls = append(l.roundCalls, request)
+	if len(l.roundErrs) > 0 {
+		err := l.roundErrs[0]
+		l.roundErrs = l.roundErrs[1:]
+		if err != nil {
+			return ports.GeneratedRound{}, ports.GenerationMetadata{}, err
+		}
+	}
 	if l.roundErr != nil {
 		return ports.GeneratedRound{}, ports.GenerationMetadata{}, l.roundErr
 	}
@@ -533,7 +542,7 @@ func TestSubmitAnswersFailsSessionWhenSecondRoundGenerationFails(t *testing.T) {
 	expected := errors.New("llm unavailable")
 	llm := &llmClientMock{
 		rounds:   []ports.GeneratedRound{generatedRound(3, 10)},
-		roundErr: expected,
+		roundErrs: []error{nil, expected},
 	}
 	service := NewAdaptiveTestService(repository, courses, llm)
 
