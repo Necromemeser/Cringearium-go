@@ -113,6 +113,17 @@ func (s *AdaptiveTestService) CreateSession(
 	return session, nil
 }
 
+func (s *AdaptiveTestService) GetSession(ctx context.Context, userID int64, sessionID string) (domain.AdaptiveSession, error) {
+	if sessionID == "" || userID <= 0 {
+		return domain.AdaptiveSession{}, ErrRoundNotFound
+	}
+	session, err := s.repository.GetSession(ctx, sessionID, userID)
+	if err != nil {
+		return domain.AdaptiveSession{}, err
+	}
+	return session, nil
+}
+
 func (s *AdaptiveTestService) SubmitAnswers(
 	ctx context.Context,
 	userID int64,
