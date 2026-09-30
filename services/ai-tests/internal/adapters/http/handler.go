@@ -111,6 +111,32 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toSessionResponse(session))
 }
 
+func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromHeader(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sessionID := r.PathValue("sessionId")
+	if sessionID == "" {
+		http.Error(w, "invalid session id", http.StatusBadRequest)
+		return
+	}
+
+	session, err := h.service.GetSession(r.Context(), userID, sessionID)
+	if err != nil {
+		if errors.Is(err, application.ErrRoundNotFound) {
+			http.Error(w, "session not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "failed to get adaptive test", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toSessionResponse(session))
+}
+
 func (h *Handler) SubmitAnswers(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromHeader(r)
 	if err != nil {
