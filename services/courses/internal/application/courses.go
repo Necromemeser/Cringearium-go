@@ -89,6 +89,112 @@ func (c *Courses) CompletePage(ctx context.Context, userID, pageID int64) error 
 	return c.repository.CompletePage(ctx, userID, pageID)
 }
 
+func (c *Courses) GetAIContext(
+	ctx context.Context,
+	userID int64,
+	courseID int64,
+	topicPageID *int64,
+) (*domain.AIContext, error) {
+	course, err := c.GetByID(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+
+	hasAccess, err := c.repository.HasAccess(ctx, userID, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if !hasAccess {
+		return nil, ErrCourseNotFound
+	}
+
+	context := &domain.AIContext{
+		CourseID:      course.Course.ID,
+		CourseTitle:   course.Course.Title,
+		Materials:     make([]domain.AIContextMaterial, 0),
+		OrdinaryTests: make([]domain.AIContextTest, 0),
+		AllowedTopics: make([]domain.AIContextTopic, 0),
+	}
+
+	for _, section := range course.Sections {
+		for _, page := range section.Pages {
+			if page.Type == domain.PageTypeTheory {
+				context.AllowedTopics = append(context.AllowedTopics, domain.AIContextTopic{
+					PageID: page.ID,
+					Title:  page.Title,
+				})
+
+				if topicPageID == nil || *topicPageID == page.ID {
+					context.Materials = append(context.Materials, domain.AIContextMaterial{
+						PageID:  page.ID,
+						Title:   page.Title,
+						Content: page.Content,
+					})
+				}
+			}
+
+			if page.Type != domain.PageTypeTest {
+				continue
+			}
+			if topicPageID != nil && *topicPageID != page.ID {
+				continue
+			}
+
+			test, err := c.repository.FindTestByPageID(ctx, userID, page.ID)
+			if err != nil {
+				return nil, err
+			}
+			if test == nil {
+				continue
+			}
+
+			ordinaryTest := domain.AIContextTest{
+				ID:        test.ID,
+				PageID:    test.PageID,
+				Title:     page.Title,
+				Questions: make([]domain.AIContextQuestion, 0, len(test.Questions)),
+			}
+
+			for _, question := range test.Questions {
+				q := domain.AIContextQuestion{
+					Question: question.Question,
+					Options:  make([]string, 0, len(question.Answers)),
+				}
+				for _, answer := range question.Answers {
+					q.Options = append(q.Options, answer.Text)
+				}
+				ordinaryTest.Questions = append(ordinaryTest.Questions, q)
+			}
+
+			context.OrdinaryTests = append(context.OrdinaryTests, ordinaryTest)
+
+			attempt, err := c.repository.FindLatestTestAttempt(ctx, userID, test.ID)
+			if err != nil {
+				return nil, err
+			}
+			if attempt != nil {
+				context.TestResults = append(context.TestResults, domain.AIContextResult{
+					TestID:       test.ID,
+					CorrectCount: countCorrect(attempt.Answers),
+					TotalCount:   len(test.Questions),
+				})
+			}
+		}
+	}
+
+	return context, nil
+}
+
+func countCorrect(answers []domain.TestAttemptAnswer) int {
+	count := 0
+	for _, answer := range answers {
+		if answer.IsCorrect {
+			count++
+		}
+	}
+	return count
+}
+
 func (c *Courses) GetTest(ctx context.Context, userID, pageID int64) (*domain.Test, *domain.TestAttempt, error) {
 	test, err := c.repository.FindTestByPageID(ctx, userID, pageID)
 	if err != nil {
