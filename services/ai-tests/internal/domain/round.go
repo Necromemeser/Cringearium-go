@@ -40,4 +40,5 @@ type AdaptiveRound struct {
 	CompletedAt     *time.Time
 
 	Questions []AdaptiveQuestion
+	Answers   []AdaptiveAnswer
 }
