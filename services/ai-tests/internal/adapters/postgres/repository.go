@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -410,4 +409,3 @@ func emptyJSON(value []byte) []byte {
 
 var _ ports.SessionRepository = (*Repository)(nil)
 
-var _ = fmt.Sprintf
