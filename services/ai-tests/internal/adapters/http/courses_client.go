@@ -4,20 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
 )
 
 type aiContextResponse struct {
-	CourseID      int64             `json:"course_id"`
-	CourseTitle   string            `json:"course_title"`
+	CourseID      int64              `json:"course_id"`
+	CourseTitle   string             `json:"course_title"`
 	Materials     []aiContextMaterial `json:"materials"`
-	OrdinaryTests []aiContextTest  `json:"ordinary_tests"`
-	TestResults   []aiContextResult `json:"test_results"`
-	AllowedTopics []aiContextTopic `json:"allowed_topics"`
+	OrdinaryTests []aiContextTest    `json:"ordinary_tests"`
+	TestResults   []aiContextResult  `json:"test_results"`
+	AllowedTopics []aiContextTopic   `json:"allowed_topics"`
 }
 
 type aiContextMaterial struct {
@@ -52,12 +54,14 @@ type aiContextTopic struct {
 }
 
 type CoursesClient struct {
+	logger  *slog.Logger
 	baseURL string
 	client  *http.Client
 }
 
-func NewCoursesClient(baseURL string) *CoursesClient {
+func NewCoursesClient(logger *slog.Logger, baseURL string) *CoursesClient {
 	return &CoursesClient{
+		logger:  logger,
 		baseURL: baseURL,
 		client:  &http.Client{},
 	}
@@ -69,8 +73,11 @@ func (c *CoursesClient) GetCourseContext(
 	courseID int64,
 	topicPageID *int64,
 ) (ports.CourseContext, error) {
+	start := time.Now()
+
 	u, err := url.Parse(c.baseURL + "/internal/courses/" + strconv.FormatInt(courseID, 10) + "/ai-context")
 	if err != nil {
+		c.logger.Error("failed to build courses request", "course_id", courseID, "error", err)
 		return ports.CourseContext{}, err
 	}
 
@@ -82,24 +89,58 @@ func (c *CoursesClient) GetCourseContext(
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
+		c.logger.Error("failed to create courses request", "course_id", courseID, "error", err)
 		return ports.CourseContext{}, err
 	}
 	request.Header.Set("X-User-ID", strconv.FormatInt(userID, 10))
 
+	c.logger.Info("requesting course context",
+		"user_id", userID,
+		"course_id", courseID,
+		"topic_page_id", topicPageID,
+	)
+
 	response, err := c.client.Do(request)
 	if err != nil {
+		c.logger.Error("courses request failed",
+			"user_id", userID,
+			"course_id", courseID,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"error", err,
+		)
 		return ports.CourseContext{}, fmt.Errorf("courses request: %w", err)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
+		c.logger.Error("courses returned non-success status",
+			"user_id", userID,
+			"course_id", courseID,
+			"status", response.StatusCode,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
 		return ports.CourseContext{}, fmt.Errorf("courses returned status %d", response.StatusCode)
 	}
 
 	var payload aiContextResponse
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		c.logger.Error("failed to decode courses response",
+			"user_id", userID,
+			"course_id", courseID,
+			"error", err,
+		)
 		return ports.CourseContext{}, fmt.Errorf("decode courses response: %w", err)
 	}
+
+	c.logger.Info("course context received",
+		"user_id", userID,
+		"course_id", courseID,
+		"materials", len(payload.Materials),
+		"ordinary_tests", len(payload.OrdinaryTests),
+		"test_results", len(payload.TestResults),
+		"allowed_topics", len(payload.AllowedTopics),
+		"duration_ms", time.Since(start).Milliseconds(),
+	)
 
 	result := ports.CourseContext{
 		CourseID:      payload.CourseID,
