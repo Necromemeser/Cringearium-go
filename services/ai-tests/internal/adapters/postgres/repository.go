@@ -228,6 +228,27 @@ func (r *Repository) CompleteRound(ctx context.Context, sessionID string, roundI
 	return nil
 }
 
+func (r *Repository) FailSession(ctx context.Context, sessionID string) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE adaptive_sessions
+		SET status = 'failed', completed_at = NOW()
+		WHERE id = $1 AND status = 'in_progress'
+	`, sessionID)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return errors.New("session cannot be failed")
+	}
+
+	return nil
+}
+
 func (r *Repository) CompleteSession(ctx context.Context, sessionID string, feedback domain.AdaptiveFeedback) error {
 	mastered, err := json.Marshal(feedback.MasteredTopics)
 	if err != nil {
