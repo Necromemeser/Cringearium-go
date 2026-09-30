@@ -52,12 +52,13 @@ func (c *Client) GenerateFeedback(ctx context.Context, in ports.GenerateFeedback
 func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *int, error) {
  start := time.Now()
  c.logger.Info("sending llm request", "model", c.model)
- payload := map[string]any{"model":c.model,"messages":[]map[string]string{{"role":"system","content":"Generate educational adaptive tests. Return only valid JSON."},{"role":"user","content":prompt}},"temperature":0.2,"response_format":map[string]string{"type":"json_object"}}
+ payload := map[string]any{"model":c.model,"messages":[]map[string]string{{"role":"system","content":"Generate educational adaptive tests. Return only valid JSON."},{"role":"user","content":prompt}},"thinking":map[string]string{"type":"disabled"},"max_tokens":4096,"temperature":0.2,"response_format":map[string]string{"type":"json_object"}}
  body, err := json.Marshal(payload)
  if err != nil { return "", nil, nil, err }
  req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
  if err != nil { return "", nil, nil, err }
  req.Header.Set("Content-Type","application/json")
+ req.Header.Set("Accept","application/json")
  if c.apiKey != "" { req.Header.Set("Authorization","Bearer "+c.apiKey) }
  resp, err := c.http.Do(req)
  if err != nil {
@@ -72,15 +73,18 @@ func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *in
   return "", nil, nil, fmt.Errorf("llm returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
  }
  var envelope struct {
- Choices []struct { Message struct { Content string "json:\"content\"" } "json:\"message\"" } "json:\"choices\""
+ Choices []struct { FinishReason string "json:\"finish_reason\""; Message struct { Content string "json:\"content\"" } "json:\"message\"" } "json:\"choices\""
  Usage struct { PromptTokens int "json:\"prompt_tokens\""; CompletionTokens int "json:\"completion_tokens\"" } "json:\"usage\""
  }
  if err := json.Unmarshal(data, &envelope); err != nil { return "", nil, nil, fmt.Errorf("decode llm response: %w", err) }
- if len(envelope.Choices) == 0 || strings.TrimSpace(envelope.Choices[0].Message.Content) == "" { return "", nil, nil, fmt.Errorf("llm returned no content") }
+ if len(envelope.Choices) == 0 { return "", nil, nil, fmt.Errorf("llm returned no choices") }
+ choice := envelope.Choices[0]
+ if choice.FinishReason == "length" { return "", nil, nil, fmt.Errorf("llm response truncated: max_tokens reached") }
+ if strings.TrimSpace(choice.Message.Content) == "" { return "", nil, nil, fmt.Errorf("llm returned no content") }
  inputTokens := envelope.Usage.PromptTokens
  outputTokens := envelope.Usage.CompletionTokens
- c.logger.Info("llm request completed", "model", c.model, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds(), "input_tokens", inputTokens, "output_tokens", outputTokens)
- return strings.TrimSpace(envelope.Choices[0].Message.Content), &inputTokens, &outputTokens, nil
+ c.logger.Info("llm request completed", "model", c.model, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds(), "finish_reason", choice.FinishReason, "input_tokens", inputTokens, "output_tokens", outputTokens)
+ return strings.TrimSpace(choice.Message.Content), &inputTokens, &outputTokens, nil
 }
 
 func decodeJSON(content string, target any) error {
