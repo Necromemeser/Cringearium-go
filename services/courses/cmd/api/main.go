@@ -33,6 +33,7 @@ func main() {
 	mux.HandleFunc("POST /api/pages/{pageId}/complete", handler.CompletePage)
 	mux.HandleFunc("GET /api/pages/{pageId}/test", handler.GetTest)
 	mux.HandleFunc("POST /api/tests/{testId}/attempts", handler.SubmitTest)
+	mux.HandleFunc("GET /internal/courses/{id}/ai-context", handler.GetAIContext)
 	server := &http.Server{Addr: ":8082", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	serverErrors := make(chan error, 1)
 	go func() { log.Println("Cringearium Courses started on :8082"); if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { serverErrors <- err } }()
