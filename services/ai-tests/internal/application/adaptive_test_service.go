@@ -163,6 +163,15 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		return domain.AdaptiveSession{}, fmt.Errorf("complete round: %w", err)
 	}
 
+	for i := range session.Rounds {
+		if session.Rounds[i].ID == roundID {
+			session.Rounds[i].Status = domain.RoundCompleted
+			session.Rounds[i].Answers = domainAnswers
+			round = session.Rounds[i]
+			break
+		}
+	}
+
 	if round.RoundNumber == maxRounds {
 		courseContext, err := s.courses.GetAIContext(ctx, userID, session.CourseID, session.TopicPageID)
 		if err != nil {
