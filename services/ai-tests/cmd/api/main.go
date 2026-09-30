@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,35 +17,41 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+		logger.Error("configuration error", "missing", "DATABASE_URL")
+		return
 	}
 
 	coursesURL := envOrDefault("COURSES_URL", "http://courses:8082")
 	llmURL := os.Getenv("LLM_BASE_URL")
 	llmModel := os.Getenv("LLM_MODEL")
 	if llmURL == "" || llmModel == "" {
-		log.Fatal("LLM_BASE_URL and LLM_MODEL are required")
+		logger.Error("configuration error", "missing", "LLM_BASE_URL and LLM_MODEL")
+		return
 	}
 
 	db, err := postgres.New(logger, databaseURL)
 	if err != nil {
-		log.Fatalf("database connection failed: %v", err)
+		logger.Error("database connection failed", "error", err)
+		return
 	}
 	defer db.Close()
 
 	if err := db.Migrate(); err != nil {
-		log.Fatalf("migration failed: %v", err)
+		logger.Error("migration failed", "error", err)
+		return
 	}
 
 	repository := postgres.NewRepository(db)
-	courses := aihttp.NewCoursesClient(coursesURL)
-	llmClient := llm.NewClient(llmURL, os.Getenv("LLM_API_KEY"), llmModel)
+	courses := aihttp.NewCoursesClient(logger, coursesURL)
+	llmClient := llm.NewClient(logger, llmURL, os.Getenv("LLM_API_KEY"), llmModel)
 	service := application.NewAdaptiveTestService(repository, courses, llmClient)
-	handler := aihttp.NewHandler(service)
+	handler := aihttp.NewHandler(logger, service)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -54,13 +59,13 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":8085",
-		Handler:           mux,
+		Handler:           requestLogger(logger, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Println("Cringearium AI-tests started on :8085")
+		logger.Info("ai-tests service started", "address", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- err
 		}
@@ -71,17 +76,18 @@ func main() {
 
 	select {
 	case err := <-serverErrors:
-		log.Fatalf("server error: %v", err)
+		logger.Error("server error", "error", err)
 	case sig := <-shutdown:
-		log.Printf("received signal: %v", sig)
+		logger.Info("shutdown signal received", "signal", sig.String())
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("graceful shutdown failed: %v", err)
+		logger.Error("graceful shutdown failed", "error", err)
+		return
 	}
-	log.Println("Cringearium AI-tests stopped")
+	logger.Info("ai-tests service stopped")
 }
 
 func envOrDefault(name, fallback string) string {
@@ -95,4 +101,45 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, `{"status":"ok"}`)
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) Write(body []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.ResponseWriter.Write(body)
+}
+
+func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w}
+
+		next.ServeHTTP(recorder, r)
+
+		status := recorder.status
+		attrs := []any{
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", status,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"remote_addr", r.RemoteAddr,
+		}
+
+		if status >= http.StatusInternalServerError {
+			logger.Error("http request", attrs...)
+		} else {
+			logger.Info("http request", attrs...)
+		}
+	})
 }
