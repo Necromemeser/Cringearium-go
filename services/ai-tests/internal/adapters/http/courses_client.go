@@ -91,7 +91,7 @@ func (c *CoursesClient) GetAIContext(
 
 	for _, item := range payload.TestResults {
 		result.TestResults = append(result.TestResults, ports.OrdinaryTestResult{
-			TestID: item.TestID, CorrectCount: item.CorrectCount, TotalCount: item.TotalCount,
+			TestID: item.TestID, TopicPageID: ptrInt64(item.PageID), TopicTitle: item.Title, CorrectCount: item.CorrectCount, TotalCount: item.TotalCount,
 		})
 	}
 
@@ -103,5 +103,7 @@ func (c *CoursesClient) GetAIContext(
 
 	return result, nil
 }
+
+func ptrInt64(value int64) *int64 { return &value }
 
 var _ ports.CourseClient = (*CoursesClient)(nil)
