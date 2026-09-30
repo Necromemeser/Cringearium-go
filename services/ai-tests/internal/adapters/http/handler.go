@@ -53,7 +53,7 @@ type roundResponse struct {
 }
 
 type questionResponse struct {
-	ID             int                    `json:"id"`
+	ID             int64                  `json:"id"`
 	Position       int                    `json:"position"`
 	TopicPageID    *int64                 `json:"topic_page_id,omitempty"`
 	TopicTitle     string                 `json:"topic_title,omitempty"`
