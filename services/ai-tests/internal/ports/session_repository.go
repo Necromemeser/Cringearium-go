@@ -41,4 +41,9 @@ type SessionRepository interface {
 		sessionID string,
 		feedback domain.AdaptiveFeedback,
 	) error
+
+	FailSession(
+		ctx context.Context,
+		sessionID string,
+	) error
 }
