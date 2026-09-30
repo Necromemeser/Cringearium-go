@@ -196,7 +196,7 @@ func toSessionResponse(session domain.AdaptiveSession) sessionResponse {
 				Difficulty:     question.Difficulty,
 				KnowledgeBasis: question.KnowledgeBasis,
 				Sources:        question.Sources,
-				Explanation:    question.Explanation,
+				Explanation:    explanationForRound(round.Status, question.Explanation),
 				Options:        make([]optionResponse, 0, len(question.Options)),
 			}
 
@@ -250,4 +250,12 @@ func userIDFromHeader(r *http.Request) (int64, error) {
 	}
 
 	return id, nil
+}
+
+
+func explanationForRound(status domain.RoundStatus, explanation string) string {
+	if status != domain.RoundCompleted {
+		return ""
+	}
+	return explanation
 }
