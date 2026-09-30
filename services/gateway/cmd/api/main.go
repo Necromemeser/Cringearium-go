@@ -17,13 +17,14 @@ import (
 )
 
 type userResponse struct { ID int64 `json:"id"` }
-type Gateway struct { authURL *url.URL; coursesURL *url.URL; client *http.Client; log *slog.Logger }
+type Gateway struct { authURL *url.URL; coursesURL *url.URL; aiTestsURL *url.URL; client *http.Client; log *slog.Logger }
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	authURL, err := serviceURL("AUTH_URL", "http://auth:8081"); if err != nil { log.Fatal(err) }
 	coursesURL, err := serviceURL("COURSES_URL", "http://courses:8082"); if err != nil { log.Fatal(err) }
-	gateway := &Gateway{authURL: authURL, coursesURL: coursesURL, client: &http.Client{Timeout: 5 * time.Second}, log: logger}
+	haiTestsURL, err := serviceURL("AI_TESTS_URL", "http://ai-tests:8085"); if err != nil { log.Fatal(err) }
+	gateway := &Gateway{authURL: authURL, coursesURL: coursesURL, aiTestsURL: aiTestsURL, client: &http.Client{Timeout: 5 * time.Second}, log: logger}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", gateway.health)
 	mux.Handle("POST /api/auth/register", gateway.authProxy()); mux.Handle("POST /api/auth/login", gateway.authProxy()); mux.Handle("GET /api/auth/me", gateway.authProxy())
@@ -31,6 +32,7 @@ func main() {
 	mux.Handle("POST /api/courses/{id}/enroll", gateway.coursesProxy(true)); mux.Handle("GET /api/courses/{id}/access", gateway.coursesProxy(true))
 	mux.Handle("GET /api/users/me/courses", gateway.coursesProxy(true)); mux.Handle("GET /api/courses/{id}/progress", gateway.coursesProxy(true)); mux.Handle("POST /api/pages/{pageId}/complete", gateway.coursesProxy(true))
 	mux.Handle("GET /api/pages/{pageId}/test", gateway.coursesProxy(true)); mux.Handle("POST /api/tests/{testId}/attempts", gateway.coursesProxy(true))
+	mux.Handle("POST /api/adaptive-tests", gateway.aiTestsProxy(true)); mux.Handle("POST /api/adaptive-tests/{sessionId}/answers", gateway.aiTestsProxy(true))
 	server := &http.Server{Addr: envOrDefault("SERVER_ADDR", ":8080"), Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	serverErrors := make(chan error, 1)
 	go func() { log.Printf("Cringearium Gateway started on %s", server.Addr); if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { serverErrors <- err } }()
@@ -42,6 +44,7 @@ func main() {
 func (g *Gateway) health(w http.ResponseWriter, r *http.Request) { w.Header().Set("Content-Type", "application/json"); w.WriteHeader(http.StatusOK); _, _ = w.Write([]byte(`{"status":"ok"}`)) }
 func (g *Gateway) authProxy() http.Handler { return g.reverseProxy(g.authURL, false) }
 func (g *Gateway) coursesProxy(protected bool) http.Handler { proxy := g.reverseProxy(g.coursesURL, true); if !protected { return proxy }; return g.requireAuth(proxy) }
+func (g *Gateway) aiTestsProxy(protected bool) http.Handler { proxy := g.reverseProxy(g.aiTestsURL, true); if !protected { return proxy }; return g.requireAuth(proxy) }
 func (g *Gateway) requireAuth(next http.Handler) http.Handler { return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Fields(r.Header.Get("Authorization")); if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, g.authURL.String()+"/api/auth/me", nil); if err != nil { http.Error(w, "internal server error", http.StatusInternalServerError); return }; req.Header.Set("Authorization", "Bearer "+parts[1])
