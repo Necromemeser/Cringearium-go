@@ -327,10 +327,33 @@ func (r *Repository) getRounds(ctx context.Context, sessionID string) ([]domain.
 		}
 
 		round.Questions = questions
+		if err := r.loadAnswers(ctx, sessionID, round.ID, &round.Answers); err != nil {
+			return nil, err
+		}
 		result = append(result, round)
 	}
 
 	return result, nil
+}
+
+
+func (r *Repository) loadAnswers(
+	ctx context.Context,
+	sessionID string,
+	roundID int64,
+	target *[]domain.AdaptiveAnswer,
+) error {
+	var rows []domain.AdaptiveAnswer
+	if err := r.db.SelectContext(ctx, &rows, `
+		SELECT session_id, round_id, question_id, selected_option_key, is_correct
+		FROM adaptive_answers
+		WHERE session_id = $1 AND round_id = $2
+		ORDER BY question_id
+	`, sessionID, roundID); err != nil {
+		return err
+	}
+	*target = rows
+	return nil
 }
 
 type questionRow struct {
