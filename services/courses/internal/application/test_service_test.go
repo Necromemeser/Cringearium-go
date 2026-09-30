@@ -124,7 +124,7 @@ func TestCoursesSubmitTestFailed(t *testing.T) {
 	got, err := service.SubmitTest(context.Background(), 42, 1, answers)
 	if err != nil { t.Fatalf("SubmitTest() error = %v", err) }
 	if got.Score != 33 || got.Passed || got.PassingScore != 70 { t.Fatalf("SubmitTest() result = %#v", got) }
-	if got.Answers[0].IsCorrect || got.Answers[1].IsCorrect || got.Answers[2].IsCorrect { t.Fatalf("SubmitTest() grading = %#v", got.Answers) }
+	if !got.Answers[0].IsCorrect || got.Answers[1].IsCorrect || got.Answers[2].IsCorrect { t.Fatalf("SubmitTest() grading = %#v", got.Answers) }
 }
 
 func TestCoursesSubmitTestAlreadyPassed(t *testing.T) {
