@@ -73,7 +73,7 @@ func (s *AdaptiveTestService) CreateSession(
 		return domain.AdaptiveSession{}, fmt.Errorf("generate first round: %w", err)
 	}
 
-	if err := validateGeneratedRound(generated, courseContext.AllowedTopics, questionCount); err != nil {
+	if err := validateGeneratedRound(generated, topicsToAllowed(courseContext.AllowedTopics), questionCount); err != nil {
 		return domain.AdaptiveSession{}, err
 	}
 
@@ -224,7 +224,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		return domain.AdaptiveSession{}, fmt.Errorf("generate second round: %w", err)
 	}
 
-	if err := validateGeneratedRound(generated, courseContext.AllowedTopics, session.QuestionCount); err != nil {
+	if err := validateGeneratedRound(generated, topicsToAllowed(courseContext.AllowedTopics), session.QuestionCount); err != nil {
 		return domain.AdaptiveSession{}, err
 	}
 
