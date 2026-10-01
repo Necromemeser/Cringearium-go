@@ -297,7 +297,7 @@ func writeCourseMaterials(b *strings.Builder, materials []ports.MaterialContext)
 		return
 	}
 	for _, material := range materials {
-		fmt.Fprintf(b, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
+		fmt.Fprintf(&b, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
 	}
 }
 
@@ -308,9 +308,9 @@ func writeOrdinaryTests(b *strings.Builder, tests []ports.OrdinaryTestContext) {
 		return
 	}
 	for _, test := range tests {
-		fmt.Fprintf(b, "[test_id=%d] %s\n", test.TestID, test.Title)
+		fmt.Fprintf(&b, "[test_id=%d] %s\n", test.TestID, test.Title)
 		for _, question := range test.Questions {
-			fmt.Fprintf(b, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
+			fmt.Fprintf(&b, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
 		}
 	}
 }
@@ -326,7 +326,7 @@ func writePreviousResults(b *strings.Builder, results []ports.PreviousResultCont
 		if result.TopicPageID != nil {
 			topicID = *result.TopicPageID
 		}
-		fmt.Fprintf(b, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
+		fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
 	}
 	b.WriteString("\n")
 }
@@ -338,7 +338,7 @@ func writeAllowedTopics(b *strings.Builder, topics []ports.AllowedTopic) {
 		return
 	}
 	for _, topic := range topics {
-		fmt.Fprintf(b, "[page_id=%d] %s\n", topic.PageID, topic.Title)
+		fmt.Fprintf(&b, "[page_id=%d] %s\n", topic.PageID, topic.Title)
 	}
 	b.WriteString("\n")
 }
@@ -359,7 +359,7 @@ func buildFeedbackPrompt(in ports.GenerateFeedbackRequest) string {
 				if topic.TopicPageID != nil {
 					topicID = *topic.TopicPageID
 				}
-				fmt.Fprintf(b, "topic=%d %s: %d/%d correct\n", topicID, topic.TopicTitle, topic.CorrectCount, topic.TotalCount)
+				fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, topic.TopicTitle, topic.CorrectCount, topic.TotalCount)
 			}
 			b.WriteString("\n")
 		}
