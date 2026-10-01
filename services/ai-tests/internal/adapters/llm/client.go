@@ -273,8 +273,8 @@ func buildRoundPrompt(in ports.GenerateRoundRequest) string {
 }
 
 const roundOutputContract = "OUTPUT CONTRACT\n\n" +
-	"Return exactly one JSON object with exactly these top-level fields: \\n" +
-	"{ \\"title\\": \\"string\\", \\"instructions\\": \\"string\\", \\"questions\\": [] }\n\n" +
+	"Return exactly one JSON object with exactly these top-level fields: \n" +
+	"{ \"title\": \"string\", \"instructions\": \"string\", \"questions\": [] }\n\n" +
 	"The questions array must contain exactly the requested number of questions.\n\n" +
 	"Each question object must contain exactly: topicPageID, topicTitle, question, difficulty, options, correctOptionKey, explanation, knowledgeBasis, sources.\n\n" +
 	"Rules:\n" +
