@@ -421,6 +421,7 @@ func (r *Repository) loadAnswers(
 	}
 
 	*target = answers
+	return nil
 }
 
 type optionRow struct {
