@@ -422,9 +422,9 @@ const roundOutputContract = "OUTPUT CONTRACT\n\n" +
 	"JSON rules: return valid JSON only; no Markdown, code fences, comments, or extra fields; numbers are JSON numbers, not strings; null is JSON null."
 
 func writeCourseMaterials(w io.Writer, materials []ports.MaterialContext) {
-	w.WriteString("COURSE MATERIALS:\n")
+	fmt.Fprint(w, "COURSE MATERIALS:\n")
 	if len(materials) == 0 {
-		w.WriteString("(none)\n\n")
+		fmt.Fprint(w, "(none)\n\n")
 		return
 	}
 	for _, material := range materials {
@@ -433,9 +433,9 @@ func writeCourseMaterials(w io.Writer, materials []ports.MaterialContext) {
 }
 
 func writeOrdinaryTests(w io.Writer, tests []ports.OrdinaryTestContext) {
-	w.WriteString("ORDINARY TESTS:\n")
+	fmt.Fprint(w, "ORDINARY TESTS:\n")
 	if len(tests) == 0 {
-		w.WriteString("(none)\n\n")
+		fmt.Fprint(w, "(none)\n\n")
 		return
 	}
 	for _, test := range tests {
@@ -447,9 +447,9 @@ func writeOrdinaryTests(w io.Writer, tests []ports.OrdinaryTestContext) {
 }
 
 func writePreviousResults(w io.Writer, results []ports.PreviousResultContext) {
-	w.WriteString("PREVIOUS RESULTS:\n")
+	fmt.Fprint(w, "PREVIOUS RESULTS:\n")
 	if len(results) == 0 {
-		w.WriteString("(none)\n\n")
+		fmt.Fprint(w, "(none)\n\n")
 		return
 	}
 	for _, result := range results {
@@ -459,19 +459,19 @@ func writePreviousResults(w io.Writer, results []ports.PreviousResultContext) {
 		}
 		fmt.Fprintf(w, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
 	}
-	w.WriteString("\n")
+	fmt.Fprint(w, "\n")
 }
 
 func writeAllowedTopics(w io.Writer, topics []ports.AllowedTopic) {
-	w.WriteString("ALLOWED TOPICS:\n")
+	fmt.Fprint(w, "ALLOWED TOPICS:\n")
 	if len(topics) == 0 {
-		w.WriteString("(none)\n\n")
+		fmt.Fprint(w, "(none)\n\n")
 		return
 	}
 	for _, topic := range topics {
 		fmt.Fprintf(w, "[page_id=%d] %s\n", topic.PageID, topic.Title)
 	}
-	w.WriteString("\n")
+	fmt.Fprint(w, "\n")
 }
 
 func buildFeedbackPrompt(in ports.GenerateFeedbackRequest) string {
