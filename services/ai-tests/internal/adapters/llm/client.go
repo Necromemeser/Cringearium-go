@@ -1,102 +1,257 @@
 package llm
 
 import (
- "bytes"
- "context"
- "crypto/sha256"
- "encoding/hex"
- "encoding/json"
- "fmt"
- "io"
- "log/slog"
- "net/http"
- "strings"
- "time"
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
 
- "github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
- )
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
+)
 
-const promptVersion = "adaptive-v1"
+const (
+	promptVersion   = "adaptive-v2"
+	maxResponseSize = 4 << 20
+	requestTimeout  = 90 * time.Second
+)
+
+const roundSystemPrompt = "You generate adaptive educational tests.\n" +
+	"Your response is consumed by a Go backend.\n" +
+	"Follow the requested JSON contract exactly.\n" +
+	"Return JSON only. Do not add Markdown, comments, explanations outside JSON, or extra fields.\n" +
+	"All numeric fields must be JSON numbers, never strings."
+
+const feedbackSystemPrompt = "You generate concise educational feedback.\n" +
+	"Your response is consumed by a Go backend.\n" +
+	"Follow the requested JSON contract exactly.\n" +
+	"Return JSON only. Do not add Markdown, comments, explanations outside JSON, or extra fields.\n" +
+	"All numeric fields must be JSON numbers, never strings."
 
 type Client struct {
- logger *slog.Logger
- baseURL string
- apiKey string
- model string
- http *http.Client
+	logger  *slog.Logger
+	baseURL string
+	apiKey  string
+	model   string
+	http    *http.Client
 }
 
 func NewClient(logger *slog.Logger, baseURL, apiKey, model string) *Client {
- return &Client{logger: logger,baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, model: model, http: &http.Client{Timeout: 90 * time.Second}}
+	return &Client{
+		logger:  logger,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		apiKey:  apiKey,
+		model:   model,
+		http:    &http.Client{Timeout: requestTimeout},
+	}
 }
 
 func (c *Client) GenerateRound(ctx context.Context, in ports.GenerateRoundRequest) (ports.GeneratedRound, ports.GenerationMetadata, error) {
- prompt := buildRoundPrompt(in)
- content, inputTokens, outputTokens, err := c.complete(ctx, prompt)
- if err != nil { return ports.GeneratedRound{}, ports.GenerationMetadata{}, err }
- var generated ports.GeneratedRound
- if err := decodeJSON(content, &generated); err != nil { return ports.GeneratedRound{}, ports.GenerationMetadata{}, fmt.Errorf("decode generated round: %w", err) }
- sum := sha256.Sum256([]byte(prompt))
- return generated, ports.GenerationMetadata{Model:c.model, PromptVersion:promptVersion, PromptHash:hex.EncodeToString(sum[:]), InputTokens:inputTokens, OutputTokens:outputTokens}, nil
+	prompt := buildRoundPrompt(in)
+
+	content, inputTokens, outputTokens, err := c.complete(ctx, roundSystemPrompt, prompt)
+	if err != nil {
+		return ports.GeneratedRound{}, ports.GenerationMetadata{}, err
+	}
+
+	var generated ports.GeneratedRound
+	if err := decodeJSON(content, &generated); err != nil {
+		return ports.GeneratedRound{}, ports.GenerationMetadata{}, fmt.Errorf("decode generated round: %w", err)
+	}
+
+	sum := sha256.Sum256([]byte(prompt))
+
+	return generated, ports.GenerationMetadata{
+		Model:         c.model,
+		PromptVersion: promptVersion,
+		PromptHash:    hex.EncodeToString(sum[:]),
+		InputTokens:   inputTokens,
+		OutputTokens:  outputTokens,
+	}, nil
 }
 
 func (c *Client) GenerateFeedback(ctx context.Context, in ports.GenerateFeedbackRequest) (ports.GeneratedFeedback, error) {
- prompt := buildFeedbackPrompt(in)
- content, _, _, err := c.complete(ctx, prompt)
- if err != nil { return ports.GeneratedFeedback{}, err }
- var generated ports.GeneratedFeedback
- if err := decodeJSON(content, &generated); err != nil { return ports.GeneratedFeedback{}, fmt.Errorf("decode generated feedback: %w", err) }
- return generated, nil
+	prompt := buildFeedbackPrompt(in)
+
+	content, _, _, err := c.complete(ctx, feedbackSystemPrompt, prompt)
+	if err != nil {
+		return ports.GeneratedFeedback{}, err
+	}
+
+	var generated ports.GeneratedFeedback
+	if err := decodeJSON(content, &generated); err != nil {
+		return ports.GeneratedFeedback{}, fmt.Errorf("decode generated feedback: %w", err)
+	}
+
+	return generated, nil
 }
 
-func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *int, error) {
- start := time.Now()
- apiKey := strings.TrimSpace(c.apiKey)
- if apiKey == "" {
-  return "", nil, nil, fmt.Errorf("LLM_API_KEY is empty")
- }
- c.logger.Info("sending llm request", "model", c.model, "auth_configured", true)
- payload := map[string]any{"model":c.model,"messages":[]map[string]string{{"role":"system","content":"Generate educational adaptive tests. Return only valid JSON."},{"role":"user","content":prompt}},"thinking":map[string]string{"type":"disabled"},"max_tokens":4096,"temperature":0.2,"response_format":map[string]string{"type":"json_object"}}
- body, err := json.Marshal(payload)
- if err != nil { return "", nil, nil, err }
- req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
- if err != nil { return "", nil, nil, err }
- req.Header.Set("Content-Type","application/json")
- req.Header.Set("Accept","application/json")
- req.Header.Set("Authorization", "Bearer "+apiKey)
- resp, err := c.http.Do(req)
- if err != nil {
-  c.logger.Error("llm request failed", "model", c.model, "duration_ms", time.Since(start).Milliseconds(), "error", err)
-  return "", nil, nil, fmt.Errorf("llm request: %w", err)
- }
- defer resp.Body.Close()
- data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
- if err != nil { return "", nil, nil, err }
- if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-  c.logger.Error("llm returned non-success status", "model", c.model, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds())
-  return "", nil, nil, fmt.Errorf("llm returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
- }
- var envelope struct {
- Choices []struct { FinishReason string "json:\"finish_reason\""; Message struct { Content string "json:\"content\"" } "json:\"message\"" } "json:\"choices\""
- Usage struct { PromptTokens int "json:\"prompt_tokens\""; CompletionTokens int "json:\"completion_tokens\"" } "json:\"usage\""
- }
- if err := json.Unmarshal(data, &envelope); err != nil { return "", nil, nil, fmt.Errorf("decode llm response: %w", err) }
- if len(envelope.Choices) == 0 { return "", nil, nil, fmt.Errorf("llm returned no choices") }
- choice := envelope.Choices[0]
- if choice.FinishReason == "length" { return "", nil, nil, fmt.Errorf("llm response truncated: max_tokens reached") }
- if strings.TrimSpace(choice.Message.Content) == "" { return "", nil, nil, fmt.Errorf("llm returned no content") }
- inputTokens := envelope.Usage.PromptTokens
- outputTokens := envelope.Usage.CompletionTokens
- c.logger.Info("llm request completed", "model", c.model, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds(), "finish_reason", choice.FinishReason, "input_tokens", inputTokens, "output_tokens", outputTokens)
- return strings.TrimSpace(choice.Message.Content), &inputTokens, &outputTokens, nil
+func (c *Client) complete(ctx context.Context, systemPrompt, prompt string) (string, *int, *int, error) {
+	start := time.Now()
+
+	apiKey := strings.TrimSpace(c.apiKey)
+	if apiKey == "" {
+		return "", nil, nil, fmt.Errorf("LLM_API_KEY is empty")
+	}
+
+	c.logger.Info("sending llm request", "model", c.model, "auth_configured", true)
+
+	payload := map[string]any{
+		"model": c.model,
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"thinking": map[string]string{
+			"type": "disabled",
+		},
+		"max_tokens": 4096,
+		"temperature": 0.2,
+		"response_format": map[string]string{
+			"type": "json_object",
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("marshal llm request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+"/chat/completions",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("create llm request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		c.logger.Error(
+			"llm request failed",
+			"model", c.model,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"error", err,
+		)
+		return "", nil, nil, fmt.Errorf("llm request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("read llm response: %w", err)
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		c.logger.Error(
+			"llm returned non-success status",
+			"model", c.model,
+			"status", resp.StatusCode,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+		return "", nil, nil, fmt.Errorf(
+			"llm returned status %d: %s",
+			resp.StatusCode,
+			strings.TrimSpace(string(data)),
+		)
+	}
+
+	content, finishReason, inputTokens, outputTokens, err := parseLLMResponse(data)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	if finishReason == "length" {
+		return "", nil, nil, fmt.Errorf("llm response truncated: max_tokens reached")
+	}
+
+	if strings.TrimSpace(content) == "" {
+		return "", nil, nil, fmt.Errorf("llm returned no content")
+	}
+
+	c.logger.Info(
+		"llm request completed",
+		"model", c.model,
+		"status", resp.StatusCode,
+		"duration_ms", time.Since(start).Milliseconds(),
+		"finish_reason", finishReason,
+		"input_tokens", inputTokens,
+		"output_tokens", outputTokens,
+	)
+
+	return strings.TrimSpace(content), &inputTokens, &outputTokens, nil
+}
+
+func parseLLMResponse(data []byte) (string, string, int, int, error) {
+	var envelope map[string]json.RawMessage
+
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return "", "", 0, 0, fmt.Errorf("decode llm response: %w", err)
+	}
+
+	var choices []map[string]json.RawMessage
+	if err := json.Unmarshal(envelope["choices"], &choices); err != nil {
+		return "", "", 0, 0, fmt.Errorf("decode llm choices: %w", err)
+	}
+	if len(choices) == 0 {
+		return "", "", 0, 0, fmt.Errorf("llm returned no choices")
+	}
+
+	var finishReason string
+	if err := json.Unmarshal(choices[0]["finish_reason"], &finishReason); err != nil {
+		return "", "", 0, 0, fmt.Errorf("decode llm finish reason: %w", err)
+	}
+
+	var message map[string]json.RawMessage
+	if err := json.Unmarshal(choices[0]["message"], &message); err != nil {
+		return "", "", 0, 0, fmt.Errorf("decode llm message: %w", err)
+	}
+
+	var content string
+	if err := json.Unmarshal(message["content"], &content); err != nil {
+		return "", "", 0, 0, fmt.Errorf("decode llm content: %w", err)
+	}
+
+	var usage struct {
+		PromptTokens     int
+		CompletionTokens int
+	}
+
+	if rawUsage, ok := envelope["usage"]; ok {
+		var usageRaw map[string]json.RawMessage
+		if err := json.Unmarshal(rawUsage, &usageRaw); err != nil {
+			return "", "", 0, 0, fmt.Errorf("decode llm usage: %w", err)
+		}
+
+		if value, ok := usageRaw["prompt_tokens"]; ok {
+			if err := json.Unmarshal(value, &usage.PromptTokens); err != nil {
+				return "", "", 0, 0, fmt.Errorf("decode prompt token count: %w", err)
+			}
+		}
+		if value, ok := usageRaw["completion_tokens"]; ok {
+			if err := json.Unmarshal(value, &usage.CompletionTokens); err != nil {
+				return "", "", 0, 0, fmt.Errorf("decode completion token count: %w", err)
+			}
+		}
+	}
+
+	return content, finishReason, usage.PromptTokens, usage.CompletionTokens, nil
 }
 
 func decodeJSON(content string, target any) error {
- content = strings.TrimSpace(content)
- content = strings.TrimPrefix(content, "```json")
- content = strings.TrimPrefix(content, "```")
- content = strings.TrimSuffix(content, "```")
- return json.Unmarshal([]byte(strings.TrimSpace(content)), target)
+	return json.Unmarshal([]byte(strings.TrimSpace(content)), target)
 }
 
 func buildRoundPrompt(in ports.GenerateRoundRequest) string {
