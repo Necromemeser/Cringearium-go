@@ -257,11 +257,11 @@ func decodeJSON(content string, target any) error {
 func buildRoundPrompt(in ports.GenerateRoundRequest) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "Generate exactly %d multiple-choice questions for an adaptive test.\n\n", in.QuestionCount)
-	fmt.Fprintf(&b, "COURSE: %s\n", in.CourseTitle)
-	fmt.Fprintf(&b, "CURRENT TOPIC: %s\n", in.TopicTitle)
-	fmt.Fprintf(&b, "ROUND: %d\n", in.RoundNumber)
-	fmt.Fprintf(&b, "STRATEGY: %s\n\n", in.Strategy)
+	fmt.Fprintf(b, "Generate exactly %d multiple-choice questions for an adaptive test.\n\n", in.QuestionCount)
+	fmt.Fprintf(b, "COURSE: %s\n", in.CourseTitle)
+	fmt.Fprintf(b, "CURRENT TOPIC: %s\n", in.TopicTitle)
+	fmt.Fprintf(b, "ROUND: %d\n", in.RoundNumber)
+	fmt.Fprintf(b, "STRATEGY: %s\n\n", in.Strategy)
 
 	writeCourseMaterials(&b, in.Materials)
 	writeOrdinaryTests(&b, in.OrdinaryTests)
@@ -297,7 +297,7 @@ func writeCourseMaterials(b *strings.Builder, materials []ports.MaterialContext)
 		return
 	}
 	for _, material := range materials {
-		fmt.Fprintf(&b, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
+		fmt.Fprintf(b, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
 	}
 }
 
@@ -308,9 +308,9 @@ func writeOrdinaryTests(b *strings.Builder, tests []ports.OrdinaryTestContext) {
 		return
 	}
 	for _, test := range tests {
-		fmt.Fprintf(&b, "[test_id=%d] %s\n", test.TestID, test.Title)
+		fmt.Fprintf(b, "[test_id=%d] %s\n", test.TestID, test.Title)
 		for _, question := range test.Questions {
-			fmt.Fprintf(&b, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
+			fmt.Fprintf(b, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
 		}
 	}
 }
@@ -326,7 +326,7 @@ func writePreviousResults(b *strings.Builder, results []ports.PreviousResultCont
 		if result.TopicPageID != nil {
 			topicID = *result.TopicPageID
 		}
-		fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
+		fmt.Fprintf(b, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
 	}
 	b.WriteString("\n")
 }
@@ -346,20 +346,20 @@ func writeAllowedTopics(b *strings.Builder, topics []ports.AllowedTopic) {
 func buildFeedbackPrompt(in ports.GenerateFeedbackRequest) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "Generate concise learning feedback for course %s.\n\n", in.CourseTitle)
+	fmt.Fprintf(b, "Generate concise learning feedback for course %s.\n\n", in.CourseTitle)
 	b.WriteString("ROUND RESULTS:\n")
 
 	if len(in.RoundResults) == 0 {
 		b.WriteString("(none)\n\n")
 	} else {
 		for _, result := range in.RoundResults {
-			fmt.Fprintf(&b, "Round %d: %d/%d correct\n", result.RoundNumber, result.CorrectCount, result.TotalCount)
+			fmt.Fprintf(b, "Round %d: %d/%d correct\n", result.RoundNumber, result.CorrectCount, result.TotalCount)
 			for _, topic := range result.Topics {
 				topicID := int64(0)
 				if topic.TopicPageID != nil {
 					topicID = *topic.TopicPageID
 				}
-				fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, topic.TopicTitle, topic.CorrectCount, topic.TotalCount)
+				fmt.Fprintf(b, "topic=%d %s: %d/%d correct\n", topicID, topic.TopicTitle, topic.CorrectCount, topic.TotalCount)
 			}
 			b.WriteString("\n")
 		}
