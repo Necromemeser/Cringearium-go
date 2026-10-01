@@ -100,28 +100,133 @@ func decodeJSON(content string, target any) error {
 }
 
 func buildRoundPrompt(in ports.GenerateRoundRequest) string {
- var b strings.Builder
- fmt.Fprintf(&b, "Generate exactly %d multiple-choice questions. Course: %s. Round: %d. Strategy: %s.\\n", in.QuestionCount, in.CourseTitle, in.RoundNumber, in.Strategy)
- b.WriteString("COURSE MATERIALS:\\n")
- for _, m := range in.Materials { fmt.Fprintf(&b, "[page_id=%d] %s\\n%s\\n", m.PageID, m.Title, m.Content) }
- b.WriteString("ORDINARY TESTS:\\n")
- for _, t := range in.OrdinaryTests { fmt.Fprintf(&b, "[test_id=%d] %s\\n", t.TestID, t.Title); for _, q := range t.Questions { fmt.Fprintf(&b, "Q: %s\\nOptions: %s\\n", q.Question, strings.Join(q.Options, " | ")) } }
- b.WriteString("PREVIOUS RESULTS:\\n")
- for _, r := range in.PreviousResults { id:=int64(0); if r.TopicPageID != nil { id=*r.TopicPageID }; fmt.Fprintf(&b, "topic=%d %s: %d/%d\\n", id, r.TopicTitle, r.CorrectCount, r.TotalCount) }
- b.WriteString("ALLOWED TOPICS:\\n")
- for _, t := range in.AllowedTopics { fmt.Fprintf(&b, "[page_id=%d] %s\\n", t.PageID, t.Title) }
- b.WriteString("Return only JSON with title, instructions, questions. Each question needs topicPageID, topicTitle, question, difficulty, options, correctOptionKey, explanation, knowledgeBasis, sources. topicPageID must be an allowed ID or null. knowledgeBasis must be course, external_knowledge, or mixed. Do not invent source URLs.")
- return b.String()
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "Generate exactly %d multiple-choice questions for an adaptive test.\n\n", in.QuestionCount)
+	fmt.Fprintf(&b, "COURSE: %s\n", in.CourseTitle)
+	fmt.Fprintf(&b, "CURRENT TOPIC: %s\n", in.TopicTitle)
+	fmt.Fprintf(&b, "ROUND: %d\n", in.RoundNumber)
+	fmt.Fprintf(&b, "STRATEGY: %s\n\n", in.Strategy)
+
+	writeCourseMaterials(&b, in.Materials)
+	writeOrdinaryTests(&b, in.OrdinaryTests)
+	writePreviousResults(&b, in.PreviousResults)
+	writeAllowedTopics(&b, in.AllowedTopics)
+
+	b.WriteString(roundOutputContract)
+	return b.String()
+}
+
+const roundOutputContract = "OUTPUT CONTRACT\n\n" +
+	"Return exactly one JSON object with exactly these top-level fields: \\n" +
+	"{ \\"title\\": \\"string\\", \\"instructions\\": \\"string\\", \\"questions\\": [] }\n\n" +
+	"The questions array must contain exactly the requested number of questions.\n\n" +
+	"Each question object must contain exactly: topicPageID, topicTitle, question, difficulty, options, correctOptionKey, explanation, knowledgeBasis, sources.\n\n" +
+	"Rules:\n" +
+	"1. topicPageID must be one of ALLOWED TOPICS, or null only when no allowed topic is appropriate.\n" +
+	"2. topicTitle must correspond to topicPageID. If topicPageID is null, use an empty string.\n" +
+	"3. question must be one clear educational multiple-choice question.\n" +
+	"4. difficulty must be a JSON integer from 1 to 5: 1 very easy, 2 easy, 3 medium, 4 hard, 5 very hard. Never use a string.\n" +
+	"5. options must contain exactly four objects with exactly key and text fields. Keys must be A, B, C, D.\n" +
+	"6. correctOptionKey must be exactly A, B, C, or D and identify the correct option.\n" +
+	"7. explanation must briefly explain why the correct answer is correct.\n" +
+	"8. knowledgeBasis must be exactly course, external_knowledge, or mixed. Prefer course knowledge when sufficient.\n" +
+	"9. sources must contain objects with exactly title and url. If knowledgeBasis is course, sources must be []. Never invent URLs.\n" +
+	"10. Do not copy ordinary-test questions verbatim. Use previous results and STRATEGY to adapt difficulty and topics.\n\n" +
+	"JSON rules: return valid JSON only; no Markdown, code fences, comments, or extra fields; numbers are JSON numbers, not strings; null is JSON null."
+
+func writeCourseMaterials(b *strings.Builder, materials []ports.MaterialContext) {
+	b.WriteString("COURSE MATERIALS:\n")
+	if len(materials) == 0 {
+		b.WriteString("(none)\n\n")
+		return
+	}
+	for _, material := range materials {
+		fmt.Fprintf(&b, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
+	}
+}
+
+func writeOrdinaryTests(b *strings.Builder, tests []ports.OrdinaryTestContext) {
+	b.WriteString("ORDINARY TESTS:\n")
+	if len(tests) == 0 {
+		b.WriteString("(none)\n\n")
+		return
+	}
+	for _, test := range tests {
+		fmt.Fprintf(&b, "[test_id=%d] %s\n", test.TestID, test.Title)
+		for _, question := range test.Questions {
+			fmt.Fprintf(&b, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
+		}
+	}
+}
+
+func writePreviousResults(b *strings.Builder, results []ports.PreviousResultContext) {
+	b.WriteString("PREVIOUS RESULTS:\n")
+	if len(results) == 0 {
+		b.WriteString("(none)\n\n")
+		return
+	}
+	for _, result := range results {
+		topicID := int64(0)
+		if result.TopicPageID != nil {
+			topicID = *result.TopicPageID
+		}
+		fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
+	}
+	b.WriteString("\n")
+}
+
+func writeAllowedTopics(b *strings.Builder, topics []ports.AllowedTopic) {
+	b.WriteString("ALLOWED TOPICS:\n")
+	if len(topics) == 0 {
+		b.WriteString("(none)\n\n")
+		return
+	}
+	for _, topic := range topics {
+		fmt.Fprintf(b, "[page_id=%d] %s\n", topic.PageID, topic.Title)
+	}
+	b.WriteString("\n")
 }
 
 func buildFeedbackPrompt(in ports.GenerateFeedbackRequest) string {
- var b strings.Builder
- fmt.Fprintf(&b, "Generate concise learning feedback for course %s.\\nROUND RESULTS:\\n", in.CourseTitle)
- for _, r := range in.RoundResults { fmt.Fprintf(&b, "Round %d: %d/%d correct\\n", r.RoundNumber, r.CorrectCount, r.TotalCount); for _, t := range r.Topics { id:=int64(0); if t.TopicPageID != nil { id=*t.TopicPageID }; fmt.Fprintf(&b, "topic=%d %s: %d/%d\\n", id, t.TopicTitle, t.CorrectCount, t.TotalCount) } }
- b.WriteString("ALLOWED TOPICS:\\n")
- for _, t := range in.AllowedTopics { fmt.Fprintf(&b, "[page_id=%d] %s\\n", t.PageID, t.Title) }
- b.WriteString("Return only JSON with summary, masteredTopics, topicsToReview, nextSteps. Use only allowed topic IDs.")
- return b.String()
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "Generate concise learning feedback for course %s.\n\n", in.CourseTitle)
+	b.WriteString("ROUND RESULTS:\n")
+
+	if len(in.RoundResults) == 0 {
+		b.WriteString("(none)\n\n")
+	} else {
+		for _, result := range in.RoundResults {
+			fmt.Fprintf(&b, "Round %d: %d/%d correct\n", result.RoundNumber, result.CorrectCount, result.TotalCount)
+			for _, topic := range result.Topics {
+				topicID := int64(0)
+				if topic.TopicPageID != nil {
+					topicID = *topic.TopicPageID
+				}
+				fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, topic.TopicTitle, topic.CorrectCount, topic.TotalCount)
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	writeAllowedTopics(&b, in.AllowedTopics)
+	b.WriteString(feedbackOutputContract)
+	return b.String()
 }
+
+const feedbackOutputContract = "OUTPUT CONTRACT\n\n" +
+	"Return exactly one JSON object with exactly these fields: summary, masteredTopics, topicsToReview, nextSteps.\n" +
+	"masteredTopics and topicsToReview items contain exactly title, topicPageID, reason.\n" +
+	"nextSteps items contain exactly title, description, topicPageID.\n\n" +
+	"Rules:\n" +
+	"1. Use only topicPageID values from ALLOWED TOPICS, or null.\n" +
+	"2. Do not invent topics.\n" +
+	"3. Base feedback only on ROUND RESULTS.\n" +
+	"4. masteredTopics are topics with strong demonstrated performance.\n" +
+	"5. topicsToReview are topics with mistakes or insufficient evidence of mastery.\n" +
+	"6. nextSteps are concrete study actions connected to allowed topics.\n" +
+	"7. Keep feedback concise and useful.\n\n" +
+	"JSON rules: return valid JSON only; no Markdown, code fences, comments, or extra fields; numbers are JSON numbers, not strings; null is JSON null."
 
 var _ ports.LLMClient = (*Client)(nil)
