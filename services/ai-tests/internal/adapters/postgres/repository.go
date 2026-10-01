@@ -398,17 +398,46 @@ func (r *Repository) loadAnswers(
 	roundID int64,
 	target *[]domain.AdaptiveAnswer,
 ) error {
-	var rows []domain.AdaptiveAnswer
+	var rows []answerRow
 	if err := r.db.SelectContext(ctx, &rows, `
-		SELECT session_id, round_id, question_id, selected_option_key, is_correct
+		SELECT session_id, round_id, question_id, selected_option_key, is_correct, answered_at
 		FROM adaptive_answers
 		WHERE session_id = $1 AND round_id = $2
 		ORDER BY question_id
 	`, sessionID, roundID); err != nil {
 		return err
 	}
-	*target = rows
-	return nil
+
+	answers := make([]domain.AdaptiveAnswer, 0, len(rows))
+	for _, row := range rows {
+		answers = append(answers, domain.AdaptiveAnswer{
+			SessionID:         row.SessionID,
+			RoundID:           row.RoundID,
+			QuestionID:        row.QuestionID,
+			SelectedOptionKey: row.SelectedOptionKey,
+			IsCorrect:         row.IsCorrect,
+			AnsweredAt:        row.AnsweredAt,
+		})
+	}
+
+	*target = answers
+}
+
+type optionRow struct {
+	ID         int64  `db:"id"`
+	QuestionID int64  `db:"question_id"`
+	Key        string `db:"key"`
+	Text       string `db:"text"`
+	Position   int    `db:"position"`
+}
+
+type answerRow struct {
+	SessionID         string    `db:"session_id"`
+	RoundID           int64     `db:"round_id"`
+	QuestionID        int64     `db:"question_id"`
+	SelectedOptionKey string    `db:"selected_option_key"`
+	IsCorrect         bool      `db:"is_correct"`
+	AnsweredAt        time.Time `db:"answered_at"`
 }
 
 type questionRow struct {
@@ -461,7 +490,7 @@ func (r *Repository) getQuestions(ctx context.Context, roundID int64) ([]domain.
 			Sources:          sources,
 		}
 
-		var options []domain.AdaptiveOption
+		var options []optionRow
 		if err := r.db.SelectContext(ctx, &options, `
 			SELECT id, question_id, option_key AS key, text, position
 			FROM adaptive_options
@@ -471,7 +500,16 @@ func (r *Repository) getQuestions(ctx context.Context, roundID int64) ([]domain.
 			return nil, err
 		}
 
-		question.Options = options
+		question.Options = make([]domain.AdaptiveOption, 0, len(options))
+		for _, option := range options {
+			question.Options = append(question.Options, domain.AdaptiveOption{
+				ID:         option.ID,
+				QuestionID: option.QuestionID,
+				Key:        option.Key,
+				Text:       option.Text,
+				Position:   option.Position,
+			})
+		}
 		result = append(result, question)
 	}
 
