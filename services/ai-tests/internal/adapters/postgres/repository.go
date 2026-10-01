@@ -47,9 +47,9 @@ func (r *Repository) CreateSession(ctx context.Context, session domain.AdaptiveS
 }
 
 func (r *Repository) GetSession(ctx context.Context, sessionID string, userID int64) (domain.AdaptiveSession, error) {
-	var session domain.AdaptiveSession
+	var row sessionRow
 
-	err := r.db.GetContext(ctx, &session, `
+	err := r.db.GetContext(ctx, &row, `
 		SELECT
 			id, user_id, course_id, topic_page_id, status,
 			current_round, question_count, context_snapshot,
@@ -59,6 +59,19 @@ func (r *Repository) GetSession(ctx context.Context, sessionID string, userID in
 	`, sessionID, userID)
 	if err != nil {
 		return domain.AdaptiveSession{}, err
+	}
+
+	session := domain.AdaptiveSession{
+		ID:              row.ID,
+		UserID:          row.UserID,
+		CourseID:        row.CourseID,
+		TopicPageID:     row.TopicPageID,
+		Status:          domain.SessionStatus(row.Status),
+		CurrentRound:    row.CurrentRound,
+		QuestionCount:   row.QuestionCount,
+		ContextSnapshot: row.ContextSnapshot,
+		CreatedAt:       row.CreatedAt,
+		CompletedAt:     row.CompletedAt,
 	}
 
 	rounds, err := r.getRounds(ctx, sessionID)
@@ -299,6 +312,19 @@ func (r *Repository) CompleteSession(ctx context.Context, sessionID string, feed
 	}
 
 	return tx.Commit()
+}
+
+type sessionRow struct {
+	ID              string     `db:"id"`
+	UserID          int64      `db:"user_id"`
+	CourseID        int64      `db:"course_id"`
+	TopicPageID     *int64     `db:"topic_page_id"`
+	Status          string     `db:"status"`
+	CurrentRound    int        `db:"current_round"`
+	QuestionCount   int        `db:"question_count"`
+	ContextSnapshot []byte     `db:"context_snapshot"`
+	CreatedAt       time.Time  `db:"created_at"`
+	CompletedAt     *time.Time `db:"completed_at"`
 }
 
 type roundRow struct {
