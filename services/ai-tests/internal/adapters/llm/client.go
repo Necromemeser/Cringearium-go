@@ -51,7 +51,11 @@ func (c *Client) GenerateFeedback(ctx context.Context, in ports.GenerateFeedback
 
 func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *int, error) {
  start := time.Now()
- c.logger.Info("sending llm request", "model", c.model)
+ apiKey := strings.TrimSpace(c.apiKey)
+ if apiKey == "" {
+  return "", nil, nil, fmt.Errorf("LLM_API_KEY is empty")
+ }
+ c.logger.Info("sending llm request", "model", c.model, "auth_configured", true)
  payload := map[string]any{"model":c.model,"messages":[]map[string]string{{"role":"system","content":"Generate educational adaptive tests. Return only valid JSON."},{"role":"user","content":prompt}},"thinking":map[string]string{"type":"disabled"},"max_tokens":4096,"temperature":0.2,"response_format":map[string]string{"type":"json_object"}}
  body, err := json.Marshal(payload)
  if err != nil { return "", nil, nil, err }
@@ -59,7 +63,7 @@ func (c *Client) complete(ctx context.Context, prompt string) (string, *int, *in
  if err != nil { return "", nil, nil, err }
  req.Header.Set("Content-Type","application/json")
  req.Header.Set("Accept","application/json")
- if c.apiKey != "" { req.Header.Set("Authorization","Bearer "+c.apiKey) }
+ req.Header.Set("Authorization", "Bearer "+apiKey)
  resp, err := c.http.Do(req)
  if err != nil {
   c.logger.Error("llm request failed", "model", c.model, "duration_ms", time.Since(start).Milliseconds(), "error", err)
