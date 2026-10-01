@@ -257,11 +257,11 @@ func decodeJSON(content string, target any) error {
 func buildRoundPrompt(in ports.GenerateRoundRequest) string {
 	var b strings.Builder
 
-	fmt.Fprintf(b, "Generate exactly %d multiple-choice questions for an adaptive test.\n\n", in.QuestionCount)
-	fmt.Fprintf(b, "COURSE: %s\n", in.CourseTitle)
-	fmt.Fprintf(b, "CURRENT TOPIC: %s\n", in.TopicTitle)
-	fmt.Fprintf(b, "ROUND: %d\n", in.RoundNumber)
-	fmt.Fprintf(b, "STRATEGY: %s\n\n", in.Strategy)
+	fmt.Fprintf(&b, "Generate exactly %d multiple-choice questions for an adaptive test.\n\n", in.QuestionCount)
+	fmt.Fprintf(&b, "COURSE: %s\n", in.CourseTitle)
+	fmt.Fprintf(&b, "CURRENT TOPIC: %s\n", in.TopicTitle)
+	fmt.Fprintf(&b, "ROUND: %d\n", in.RoundNumber)
+	fmt.Fprintf(&b, "STRATEGY: %s\n\n", in.Strategy)
 
 	writeCourseMaterials(&b, in.Materials)
 	writeOrdinaryTests(&b, in.OrdinaryTests)
@@ -346,14 +346,14 @@ func writeAllowedTopics(b *strings.Builder, topics []ports.AllowedTopic) {
 func buildFeedbackPrompt(in ports.GenerateFeedbackRequest) string {
 	var b strings.Builder
 
-	fmt.Fprintf(b, "Generate concise learning feedback for course %s.\n\n", in.CourseTitle)
+	fmt.Fprintf(&b, "Generate concise learning feedback for course %s.\n\n", in.CourseTitle)
 	b.WriteString("ROUND RESULTS:\n")
 
 	if len(in.RoundResults) == 0 {
 		b.WriteString("(none)\n\n")
 	} else {
 		for _, result := range in.RoundResults {
-			fmt.Fprintf(b, "Round %d: %d/%d correct\n", result.RoundNumber, result.CorrectCount, result.TotalCount)
+			fmt.Fprintf(&b, "Round %d: %d/%d correct\n", result.RoundNumber, result.CorrectCount, result.TotalCount)
 			for _, topic := range result.Topics {
 				topicID := int64(0)
 				if topic.TopicPageID != nil {
