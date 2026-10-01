@@ -64,6 +64,9 @@ func (c *Client) GenerateRound(ctx context.Context, in ports.GenerateRoundReques
 	if err := decodeJSON(content, &generated); err != nil {
 		return ports.GeneratedRound{}, ports.GenerationMetadata{}, fmt.Errorf("decode generated round: %w", err)
 	}
+	if err := validateGeneratedRound(generated, in); err != nil {
+		return ports.GeneratedRound{}, ports.GenerationMetadata{}, fmt.Errorf("validate generated round: %w", err)
+	}
 
 	sum := sha256.Sum256([]byte(prompt))
 
@@ -87,6 +90,9 @@ func (c *Client) GenerateFeedback(ctx context.Context, in ports.GenerateFeedback
 	var generated ports.GeneratedFeedback
 	if err := decodeJSON(content, &generated); err != nil {
 		return ports.GeneratedFeedback{}, fmt.Errorf("decode generated feedback: %w", err)
+	}
+	if err := validateGeneratedFeedback(generated, in); err != nil {
+		return ports.GeneratedFeedback{}, fmt.Errorf("validate generated feedback: %w", err)
 	}
 
 	return generated, nil
@@ -251,7 +257,132 @@ func parseLLMResponse(data []byte) (string, string, int, int, error) {
 }
 
 func decodeJSON(content string, target any) error {
-	return json.Unmarshal([]byte(strings.TrimSpace(content)), target)
+	decoder := json.NewDecoder(strings.NewReader(strings.TrimSpace(content)))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("multiple JSON values")
+		}
+		return fmt.Errorf("trailing data after JSON: %w", err)
+	}
+
+	return nil
+}
+
+func validateGeneratedRound(round ports.GeneratedRound, in ports.GenerateRoundRequest) error {
+	if len(round.Questions) != in.QuestionCount {
+		return fmt.Errorf("expected %d questions, got %d", in.QuestionCount, len(round.Questions))
+	}
+
+	allowedTopics := make(map[int64]string, len(in.AllowedTopics))
+	for _, topic := range in.AllowedTopics {
+		allowedTopics[topic.PageID] = topic.Title
+	}
+
+	for i, question := range round.Questions {
+		if question.Difficulty < 1 || question.Difficulty > 5 {
+			return fmt.Errorf("question %d: difficulty must be between 1 and 5, got %d", i+1, question.Difficulty)
+		}
+
+		if len(question.Options) != 4 {
+			return fmt.Errorf("question %d: expected 4 options, got %d", i+1, len(question.Options))
+		}
+
+		seenKeys := make(map[string]struct{}, 4)
+		for _, option := range question.Options {
+			if option.Key != "A" && option.Key != "B" && option.Key != "C" && option.Key != "D" {
+				return fmt.Errorf("question %d: invalid option key %q", i+1, option.Key)
+			}
+			if _, exists := seenKeys[option.Key]; exists {
+				return fmt.Errorf("question %d: duplicate option key %q", i+1, option.Key)
+			}
+			if strings.TrimSpace(option.Text) == "" {
+				return fmt.Errorf("question %d: option %s is empty", i+1, option.Key)
+			}
+			seenKeys[option.Key] = struct{}{}
+		}
+
+		if len(seenKeys) != 4 {
+			return fmt.Errorf("question %d: options must contain A, B, C and D", i+1)
+		}
+		if _, ok := seenKeys[question.CorrectOptionKey]; !ok {
+			return fmt.Errorf("question %d: correctOptionKey %q does not match an option", i+1, question.CorrectOptionKey)
+		}
+
+		if question.TopicPageID == nil {
+			if question.TopicTitle != "" {
+				return fmt.Errorf("question %d: topicTitle must be empty when topicPageID is null", i+1)
+			}
+		} else {
+			title, ok := allowedTopics[*question.TopicPageID]
+			if !ok {
+				return fmt.Errorf("question %d: topicPageID %d is not allowed", i+1, *question.TopicPageID)
+			}
+			if question.TopicTitle != title {
+				return fmt.Errorf("question %d: topicTitle does not match topicPageID %d", i+1, *question.TopicPageID)
+			}
+		}
+
+		switch question.KnowledgeBasis {
+		case "course":
+			if len(question.Sources) != 0 {
+				return fmt.Errorf("question %d: course knowledge must not have sources", i+1)
+			}
+		case "external_knowledge", "mixed":
+			for sourceIndex, source := range question.Sources {
+				if strings.TrimSpace(source.Title) == "" || strings.TrimSpace(source.URL) == "" {
+					return fmt.Errorf("question %d: source %d must have title and url", i+1, sourceIndex+1)
+				}
+			}
+		default:
+			return fmt.Errorf("question %d: invalid knowledgeBasis %q", i+1, question.KnowledgeBasis)
+		}
+	}
+
+	return nil
+}
+
+func validateGeneratedFeedback(feedback ports.GeneratedFeedback, in ports.GenerateFeedbackRequest) error {
+	allowedTopics := make(map[int64]struct{}, len(in.AllowedTopics))
+	for _, topic := range in.AllowedTopics {
+		allowedTopics[topic.PageID] = struct{}{}
+	}
+
+	validateTopic := func(item ports.GeneratedTopicFeedback, field string) error {
+		if item.TopicPageID == nil {
+			return nil
+		}
+		if _, ok := allowedTopics[*item.TopicPageID]; !ok {
+			return fmt.Errorf("%s contains unknown topicPageID %d", field, *item.TopicPageID)
+		}
+		return nil
+	}
+
+	for _, item := range feedback.MasteredTopics {
+		if err := validateTopic(item, "masteredTopics"); err != nil {
+			return err
+		}
+	}
+	for _, item := range feedback.TopicsToReview {
+		if err := validateTopic(item, "topicsToReview"); err != nil {
+			return err
+		}
+	}
+	for _, item := range feedback.NextSteps {
+		if item.TopicPageID != nil {
+			if _, ok := allowedTopics[*item.TopicPageID]; !ok {
+				return fmt.Errorf("nextSteps contains unknown topicPageID %d", *item.TopicPageID)
+			}
+		}
+	}
+
+	return nil
 }
 
 func buildRoundPrompt(in ports.GenerateRoundRequest) string {
@@ -290,35 +421,35 @@ const roundOutputContract = "OUTPUT CONTRACT\n\n" +
 	"10. Do not copy ordinary-test questions verbatim. Use previous results and STRATEGY to adapt difficulty and topics.\n\n" +
 	"JSON rules: return valid JSON only; no Markdown, code fences, comments, or extra fields; numbers are JSON numbers, not strings; null is JSON null."
 
-func writeCourseMaterials(b *strings.Builder, materials []ports.MaterialContext) {
-	b.WriteString("COURSE MATERIALS:\n")
+func writeCourseMaterials(w io.Writer, materials []ports.MaterialContext) {
+	w.WriteString("COURSE MATERIALS:\n")
 	if len(materials) == 0 {
-		b.WriteString("(none)\n\n")
+		w.WriteString("(none)\n\n")
 		return
 	}
 	for _, material := range materials {
-		fmt.Fprintf(&b, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
+		fmt.Fprintf(w, "[page_id=%d] %s\n%s\n\n", material.PageID, material.Title, material.Content)
 	}
 }
 
-func writeOrdinaryTests(b *strings.Builder, tests []ports.OrdinaryTestContext) {
-	b.WriteString("ORDINARY TESTS:\n")
+func writeOrdinaryTests(w io.Writer, tests []ports.OrdinaryTestContext) {
+	w.WriteString("ORDINARY TESTS:\n")
 	if len(tests) == 0 {
-		b.WriteString("(none)\n\n")
+		w.WriteString("(none)\n\n")
 		return
 	}
 	for _, test := range tests {
-		fmt.Fprintf(&b, "[test_id=%d] %s\n", test.TestID, test.Title)
+		fmt.Fprintf(w, "[test_id=%d] %s\n", test.TestID, test.Title)
 		for _, question := range test.Questions {
-			fmt.Fprintf(&b, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
+			fmt.Fprintf(w, "Q: %s\nOptions: %s\n\n", question.Question, strings.Join(question.Options, " | "))
 		}
 	}
 }
 
-func writePreviousResults(b *strings.Builder, results []ports.PreviousResultContext) {
-	b.WriteString("PREVIOUS RESULTS:\n")
+func writePreviousResults(w io.Writer, results []ports.PreviousResultContext) {
+	w.WriteString("PREVIOUS RESULTS:\n")
 	if len(results) == 0 {
-		b.WriteString("(none)\n\n")
+		w.WriteString("(none)\n\n")
 		return
 	}
 	for _, result := range results {
@@ -326,21 +457,21 @@ func writePreviousResults(b *strings.Builder, results []ports.PreviousResultCont
 		if result.TopicPageID != nil {
 			topicID = *result.TopicPageID
 		}
-		fmt.Fprintf(&b, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
+		fmt.Fprintf(w, "topic=%d %s: %d/%d correct\n", topicID, result.TopicTitle, result.CorrectCount, result.TotalCount)
 	}
-	b.WriteString("\n")
+	w.WriteString("\n")
 }
 
-func writeAllowedTopics(b *strings.Builder, topics []ports.AllowedTopic) {
-	b.WriteString("ALLOWED TOPICS:\n")
+func writeAllowedTopics(w io.Writer, topics []ports.AllowedTopic) {
+	w.WriteString("ALLOWED TOPICS:\n")
 	if len(topics) == 0 {
-		b.WriteString("(none)\n\n")
+		w.WriteString("(none)\n\n")
 		return
 	}
 	for _, topic := range topics {
-		fmt.Fprintf(&b, "[page_id=%d] %s\n", topic.PageID, topic.Title)
+		fmt.Fprintf(w, "[page_id=%d] %s\n", topic.PageID, topic.Title)
 	}
-	b.WriteString("\n")
+	w.WriteString("\n")
 }
 
 func buildFeedbackPrompt(in ports.GenerateFeedbackRequest) string {
