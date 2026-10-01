@@ -76,9 +76,9 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_tests?sslmode=disable
       COURSES_URL: http://courses:8082
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-flash}
+      LLM_BASE_URL: ${DEEPSEEK_API_URL}
+      LLM_API_KEY: ${DEEPSEEK_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
     expose:
       - "8085"
     depends_on:
