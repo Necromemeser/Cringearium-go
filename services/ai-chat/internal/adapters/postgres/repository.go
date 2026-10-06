@@ -49,7 +49,7 @@ func (r *Repository) ListMessages(ctx context.Context, conversationID, userID in
 	if _, err := r.GetConversation(ctx, conversationID, userID); err != nil { return nil, err }
 	var rows []domain.Message
 	err := r.db.conn.SelectContext(ctx, &rows, `
-		SELECT id, conversation_id AS conversationid, user_id, content, is_ai_response AS isairesponse, created_at AS createdat
+		SELECT id, conversation_id AS conversationid, user_id AS userid, content, is_ai_response AS isairesponse, created_at AS createdat
 		FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC, id ASC
 	`, conversationID)
 	return rows, err
@@ -59,7 +59,7 @@ func (r *Repository) SaveMessage(ctx context.Context, message domain.Message) (d
 	err := r.db.conn.QueryRowxContext(ctx, `
 		INSERT INTO messages (conversation_id, user_id, content, is_ai_response)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, conversation_id AS conversationid, user_id, content, is_ai_response AS isairesponse, created_at AS createdat
+		RETURNING id, conversation_id AS conversationid, user_id AS userid, content, is_ai_response AS isairesponse, created_at AS createdat
 	`, message.ConversationID, message.UserID, message.Content, message.IsAIResponse).StructScan(&result)
 	if err != nil { return domain.Message{}, err }
 	_, err = r.db.conn.ExecContext(ctx, `UPDATE conversations SET updated_at = $1 WHERE id = $2`, result.CreatedAt, result.ConversationID)
