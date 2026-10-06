@@ -71,6 +71,14 @@ func (s *ChatService) ListMessages(ctx context.Context, conversationID, userID i
 	return items, err
 }
 
+func (s *ChatService) ReserveAIRequest(ctx context.Context, userID int64) (int, error) {
+	count, err := s.repository.ReserveAIRequest(ctx, userID, dailyRequestLimit)
+	if errors.Is(err, ports.ErrDailyLimitReached) {
+		return 0, ErrDailyLimitReached
+	}
+	return count, err
+}
+
 func (s *ChatService) StreamResponse(ctx context.Context, conversationID, userID int64, input string, onChunk func(string) error) error {
 	input = strings.TrimSpace(input)
 	if input == "" {
@@ -81,13 +89,6 @@ func (s *ChatService) StreamResponse(ctx context.Context, conversationID, userID
 	}
 
 	if _, err := s.GetConversation(ctx, conversationID, userID); err != nil {
-		return err
-	}
-
-	if _, err := s.repository.ReserveAIRequest(ctx, userID, dailyRequestLimit); err != nil {
-		if errors.Is(err, ports.ErrDailyLimitReached) {
-			return ErrDailyLimitReached
-		}
 		return err
 	}
 
