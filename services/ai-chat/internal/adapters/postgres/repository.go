@@ -66,6 +66,13 @@ func (r *Repository) SaveMessage(ctx context.Context, message domain.Message) (d
 	return result, err
 }
 
+func (r *Repository) UpdateConversationName(ctx context.Context, conversationID, userID int64, name string) error {
+	result, err := r.db.conn.ExecContext(ctx, `UPDATE conversations SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`, name, conversationID, userID)
+	if err != nil { return err }
+	count, err := result.RowsAffected(); if err != nil { return err }
+	if count == 0 { return ports.ErrNotFound }
+	return nil
+}
 func (r *Repository) ReserveAIRequest(ctx context.Context, userID int64, limit int) (int, error) {
 	var count int
 	err := r.db.conn.QueryRowContext(ctx, `
