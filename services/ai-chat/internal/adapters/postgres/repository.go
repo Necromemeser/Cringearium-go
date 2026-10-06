@@ -65,6 +65,23 @@ func (r *Repository) SaveMessage(ctx context.Context, message domain.Message) (d
 	_, err = r.db.conn.ExecContext(ctx, `UPDATE conversations SET updated_at = $1 WHERE id = $2`, result.CreatedAt, result.ConversationID)
 	return result, err
 }
+
+func (r *Repository) ReserveAIRequest(ctx context.Context, userID int64, limit int) (int, error) {
+	var count int
+	err := r.db.conn.QueryRowContext(ctx, `
+		INSERT INTO ai_daily_usage (user_id, usage_date, request_count)
+		VALUES ($1, CURRENT_DATE, 1)
+		ON CONFLICT (user_id, usage_date) DO UPDATE
+		SET request_count = ai_daily_usage.request_count + 1
+		WHERE ai_daily_usage.request_count < $2
+		RETURNING request_count
+	`, userID, limit).Scan(&count)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ports.ErrDailyLimitReached
+	}
+	return count, err
+}
+
 func (r *Repository) GetAdminStats(ctx context.Context) (domain.AdminStats, error) {
 	var stats domain.AdminStats
 	queries := []struct{ target *int64; query string }{
