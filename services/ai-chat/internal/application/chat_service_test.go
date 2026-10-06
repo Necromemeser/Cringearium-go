@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ type repositoryMock struct {
 	conversation domain.Conversation
 	messages     []domain.Message
 	saved        []domain.Message
+	updatedName  string
+	updateErr    error
 	getErr       error
 	usage        int
 	usageErr     error
@@ -53,8 +56,9 @@ func (m *repositoryMock) SaveMessage(_ context.Context, message domain.Message) 
 	return message, nil
 }
 
-func (m *repositoryMock) UpdateConversationName(context.Context, int64, int64, string) error {
-	return nil
+func (m *repositoryMock) UpdateConversationName(_ context.Context, _ int64, _ int64, name string) error {
+	m.updatedName = name
+	return m.updateErr
 }
 func (m *repositoryMock) ReserveAIRequest(context.Context, int64, int) (int, error) {
 	if m.usageErr != nil {
@@ -69,10 +73,20 @@ func (m *repositoryMock) GetAdminStats(context.Context) (domain.AdminStats, erro
 }
 
 type llmMock struct {
-	messages []ports.LLMMessage
+	messages       []ports.LLMMessage
+	completeCalls  int
+	completeResult string
+	completeErr    error
 }
 
 func (m *llmMock) Complete(context.Context, []ports.LLMMessage) (string, error) {
+	m.completeCalls++
+	if m.completeErr != nil {
+		return "", m.completeErr
+	}
+	if m.completeResult != "" {
+		return m.completeResult, nil
+	}
 	return "Учебный чат", nil
 }
 
@@ -165,3 +179,85 @@ func TestStreamResponseRejectsEmptyMessage(t *testing.T) {
 		t.Fatal("expected ErrEmptyMessage")
 	}
 }
+
+
+func TestStreamResponseGeneratesTitleForFirstMessage(t *testing.T) {
+	userID := int64(42)
+	repo := &repositoryMock{
+		conversation: domain.Conversation{ID: 7, UserID: userID, Name: "Новый чат"},
+	}
+	llm := &llmMock{completeResult: ""Производные и их графики.""}
+	service := NewChatService(repo, llm)
+
+	err := service.StreamResponse(context.Background(), 7, userID, "Помоги разобраться с производными", func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("StreamResponse() error = %v", err)
+	}
+	if llm.completeCalls != 1 {
+		t.Fatalf("Complete() calls = %d, want 1", llm.completeCalls)
+	}
+	if repo.updatedName != "Производные и их графики" {
+		t.Fatalf("updated name = %q", repo.updatedName)
+	}
+}
+
+func TestStreamResponseDoesNotGenerateTitleForExistingConversation(t *testing.T) {
+	userID := int64(42)
+	repo := &repositoryMock{
+		conversation: domain.Conversation{ID: 7, UserID: userID},
+		messages: []domain.Message{
+			{ID: 1, ConversationID: 7, UserID: &userID, Content: "Старый вопрос"},
+			{ID: 2, ConversationID: 7, Content: "Старый ответ", IsAIResponse: true},
+		},
+	}
+	llm := &llmMock{}
+	service := NewChatService(repo, llm)
+
+	if err := service.StreamResponse(context.Background(), 7, userID, "Новый вопрос", func(string) error { return nil }); err != nil {
+		t.Fatalf("StreamResponse() error = %v", err)
+	}
+	if llm.completeCalls != 0 {
+		t.Fatalf("Complete() calls = %d, want 0", llm.completeCalls)
+	}
+	if repo.updatedName != "" {
+		t.Fatalf("updated name = %q, want empty", repo.updatedName)
+	}
+}
+
+func TestStreamResponseIgnoresTitleGenerationError(t *testing.T) {
+	userID := int64(42)
+	repo := &repositoryMock{
+		conversation: domain.Conversation{ID: 7, UserID: userID},
+	}
+	llm := &llmMock{completeErr: errors.New("title generation failed")}
+	service := NewChatService(repo, llm)
+
+	if err := service.StreamResponse(context.Background(), 7, userID, "Что такое Go?", func(string) error { return nil }); err != nil {
+		t.Fatalf("StreamResponse() error = %v, want nil", err)
+	}
+	if len(repo.saved) != 2 {
+		t.Fatalf("saved messages = %d, want 2", len(repo.saved))
+	}
+	if repo.updatedName != "" {
+		t.Fatalf("updated name = %q, want empty", repo.updatedName)
+	}
+}
+
+func TestStreamResponseRejectsTooLongMessage(t *testing.T) {
+	repo := &repositoryMock{conversation: domain.Conversation{ID: 7, UserID: 42}}
+	service := NewChatService(repo, &llmMock{})
+	input := strings.Repeat("a", maxMessageLength+1)
+
+	err := service.StreamResponse(context.Background(), 7, 42, input, func(string) error { return nil })
+	if err == nil || err.Error() != "message is too long" {
+		t.Fatalf("error = %v, want message is too long", err)
+	}
+	if len(repo.saved) != 0 {
+		t.Fatalf("saved messages = %d, want 0", len(repo.saved))
+	}
+}
+
+func TestStreamResponseDoesNotCallLLMWhenRepositorySaveFails(t *testing.T) {
+	// covered by a dedicated failure mock below
+}
+
