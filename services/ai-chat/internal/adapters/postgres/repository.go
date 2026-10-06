@@ -27,7 +27,7 @@ func (r *Repository) GetConversation(ctx context.Context, id, userID int64) (dom
 		SELECT id, user_id, name, created_at, updated_at FROM conversations
 		WHERE id = $1 AND user_id = $2
 	`, id, userID).StructScan(&result)
-	if errors.Is(err, sql.ErrNoRows) { return domain.Conversation{}, ErrNotFound }
+	if errors.Is(err, sql.ErrNoRows) { return domain.Conversation{}, ports.ErrNotFound }
 	return result, err
 }
 func (r *Repository) ListConversations(ctx context.Context, userID int64) ([]domain.Conversation, error) {
@@ -42,7 +42,7 @@ func (r *Repository) DeleteConversation(ctx context.Context, id, userID int64) e
 	result, err := r.db.conn.ExecContext(ctx, `DELETE FROM conversations WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil { return err }
 	count, err := result.RowsAffected(); if err != nil { return err }
-	if count == 0 { return ErrNotFound }
+	if count == 0 { return ports.ErrNotFound }
 	return nil
 }
 func (r *Repository) ListMessages(ctx context.Context, conversationID, userID int64) ([]domain.Message, error) {
