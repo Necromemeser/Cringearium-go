@@ -8,6 +8,7 @@ import (
 )
 
 var ErrNotFound = errors.New("conversation not found")
+var ErrDailyLimitReached = errors.New("daily ai request limit reached")
 
 type Repository interface {
 	CreateConversation(ctx context.Context, conversation domain.Conversation) (domain.Conversation, error)
@@ -16,6 +17,7 @@ type Repository interface {
 	DeleteConversation(ctx context.Context, id, userID int64) error
 	ListMessages(ctx context.Context, conversationID, userID int64) ([]domain.Message, error)
 	SaveMessage(ctx context.Context, message domain.Message) (domain.Message, error)
+	ReserveAIRequest(ctx context.Context, userID int64, limit int) (int, error)
 	GetAdminStats(ctx context.Context) (domain.AdminStats, error)
 }
 
