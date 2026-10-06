@@ -117,4 +117,3 @@ func (c *Client) Stream(ctx context.Context, messages []ports.LLMMessage, onChun
 
 var _ ports.LLMClient = (*Client)(nil)
 
-var _ = time.Second
