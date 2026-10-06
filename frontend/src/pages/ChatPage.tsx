@@ -13,6 +13,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const messagesRef = useRef<HTMLDivElement>(null)
+  const shouldAutoScrollRef = useRef(true)
 
   useEffect(() => {
     if (!localStorage.getItem(TOKEN_KEY)) {
@@ -40,9 +41,17 @@ export default function ChatPage() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить сообщения'))
   }, [activeChat])
 
-  useEffect(() => {
+  function handleMessagesScroll() {
     const container = messagesRef.current
     if (!container) return
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+    shouldAutoScrollRef.current = distanceFromBottom < 80
+  }
+
+  useEffect(() => {
+    const container = messagesRef.current
+    if (!container || !shouldAutoScrollRef.current) return
 
     container.scrollTop = container.scrollHeight
   }, [messages])
@@ -170,7 +179,7 @@ export default function ChatPage() {
               </div>
             ) : (
               <>
-                <div ref={messagesRef} className="chat-messages">
+                <div ref={messagesRef} className="chat-messages" onScroll={handleMessagesScroll}>
                   {messages.map((message) => (
                     <div key={message.id} className={`chat-message ${message.isAiResponse ? 'assistant' : 'user'}`}>
                       <div className="chat-message-author">{message.isAiResponse ? 'Кринжик' : 'Вы'}</div>
