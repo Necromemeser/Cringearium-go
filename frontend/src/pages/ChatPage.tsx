@@ -122,6 +122,8 @@ export default function ChatPage() {
           setError(event.message)
         }
       })
+      const updatedChats = await listChats()
+      setChats(updatedChats)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось отправить сообщение')
       setMessages((items) => items.slice(0, -2))
