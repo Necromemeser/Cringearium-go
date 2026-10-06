@@ -126,7 +126,7 @@ func (c *Client) Complete(ctx context.Context, messages []ports.LLMMessage) (str
 	req.Header.Set("Content-Type", "application/json"); req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	resp, err := c.http.Do(req); if err != nil { return "", fmt.Errorf("llm request: %w", err) }; defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 { data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); return "", fmt.Errorf("llm returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data))) }
-	var result struct { Choices []struct { Message struct { Content string `+"`json:"content"`"+` } `+"`json:"message"`"+` } `+"`json:"choices"`"+` }
+	var result struct { Choices []struct { Message struct { Content string ``json:"content"` } ``json:"message"` } ``json:"choices"` }
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return "", fmt.Errorf("decode llm response: %w", err) }
 	if len(result.Choices) == 0 { return "", errors.New("llm returned no choices") }
 	return strings.TrimSpace(result.Choices[0].Message.Content), nil
