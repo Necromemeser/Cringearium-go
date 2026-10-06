@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -115,5 +116,20 @@ func (c *Client) Stream(ctx context.Context, messages []ports.LLMMessage, onChun
 	return full.String(), nil
 }
 
+func (c *Client) Complete(ctx context.Context, messages []ports.LLMMessage) (string, error) {
+	if strings.TrimSpace(c.apiKey) == "" { return "", fmt.Errorf("LLM_API_KEY is empty") }
+	bodyMessages := make([]map[string]string, 0, len(messages))
+	for _, message := range messages { bodyMessages = append(bodyMessages, map[string]string{"role": message.Role, "content": message.Content}) }
+	payload := map[string]any{"model": c.model, "messages": bodyMessages, "stream": false, "thinking": map[string]string{"type": "disabled"}, "max_tokens": 32}
+	body, err := json.Marshal(payload); if err != nil { return "", fmt.Errorf("marshal llm request: %w", err) }
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body)); if err != nil { return "", fmt.Errorf("create llm request: %w", err) }
+	req.Header.Set("Content-Type", "application/json"); req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	resp, err := c.http.Do(req); if err != nil { return "", fmt.Errorf("llm request: %w", err) }; defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 { data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); return "", fmt.Errorf("llm returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(data))) }
+	var result struct { Choices []struct { Message struct { Content string `+"`json:"content"`"+` } `+"`json:"message"`"+` } `+"`json:"choices"`"+` }
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return "", fmt.Errorf("decode llm response: %w", err) }
+	if len(result.Choices) == 0 { return "", errors.New("llm returned no choices") }
+	return strings.TrimSpace(result.Choices[0].Message.Content), nil
+}
 var _ ports.LLMClient = (*Client)(nil)
 
