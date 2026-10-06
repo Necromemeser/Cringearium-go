@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Chat, ChatMessage } from '../api/chat'
 import { createChat, deleteChat, getChatMessages, listChats, streamChatMessage } from '../api/chat'
 import { TOKEN_KEY } from '../constants/auth'
+import MarkdownContent from '../components/chat/MarkdownContent'
 
 export default function ChatPage() {
   const [chats, setChats] = useState<Chat[]>([])
@@ -105,6 +106,13 @@ export default function ChatPage() {
     }
   }
 
+  function handleInputKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey) return
+
+    event.preventDefault()
+    void handleSend()
+  }
+
   async function handleSelectChat(id: number) {
     if (sending) return
     setActiveChat(id)
@@ -158,7 +166,13 @@ export default function ChatPage() {
                   {messages.map((message) => (
                     <div key={message.id} className={`chat-message ${message.isAiResponse ? 'assistant' : 'user'}`}>
                       <div className="chat-message-author">{message.isAiResponse ? 'Кринжик' : 'Вы'}</div>
-                      <div className="chat-message-content">{message.content || (sending ? '...' : '')}</div>
+                      <div className="chat-message-content">
+                        {message.isAiResponse ? (
+                          message.content ? <MarkdownContent content={message.content} /> : (sending ? '...' : '')
+                        ) : (
+                          message.content
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -166,7 +180,9 @@ export default function ChatPage() {
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={handleInputKeyDown}
                     placeholder="Напишите сообщение..."
+                    aria-label="Сообщение"
                     maxLength={32768}
                     rows={3}
                     disabled={sending}
