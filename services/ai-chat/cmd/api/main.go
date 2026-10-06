@@ -81,6 +81,12 @@ func (w *statusRecorder) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 
+func (w *statusRecorder) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
