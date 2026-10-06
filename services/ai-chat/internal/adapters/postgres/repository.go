@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/domain"
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/ports"
