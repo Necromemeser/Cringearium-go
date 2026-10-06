@@ -186,7 +186,7 @@ func TestStreamResponseGeneratesTitleForFirstMessage(t *testing.T) {
 	repo := &repositoryMock{
 		conversation: domain.Conversation{ID: 7, UserID: userID, Name: "Новый чат"},
 	}
-	llm := &llmMock{completeResult: ""Производные и их графики.""}
+	llm := &llmMock{completeResult: `"Производные и их графики."`}
 	service := NewChatService(repo, llm)
 
 	err := service.StreamResponse(context.Background(), 7, userID, "Помоги разобраться с производными", func(string) error { return nil })
