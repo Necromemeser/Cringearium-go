@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -74,6 +75,7 @@ func (h *Handler) CreateConversation(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.service.CreateConversation(r.Context(), userID, req.Name)
 	if err != nil {
+		slog.Error("create conversation failed", "error", err, "user_id", userID)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -89,6 +91,7 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.service.ListConversations(r.Context(), userID)
 	if err != nil {
+		slog.Error("list conversations failed", "error", err, "user_id", userID)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -119,6 +122,7 @@ func (h *Handler) GetConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("get conversation failed", "error", err, "user_id", userID, "chat_id", id)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -168,6 +172,7 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		slog.Error("list messages failed", "error", err, "user_id", userID, "chat_id", id)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -231,6 +236,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return writeSSE(w, flusher, streamEvent{Type: "chunk", Content: chunk})
 	})
 	if err != nil {
+		slog.Error("stream response failed", "error", err, "user_id", userID, "chat_id", chatID)
 		_ = writeSSE(w, flusher, streamEvent{Type: "error", Message: "не удалось получить ответ от ассистента"})
 		return
 	}
@@ -241,6 +247,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetAdminStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.service.GetAdminStats(r.Context())
 	if err != nil {
+		slog.Error("get admin chat stats failed", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
