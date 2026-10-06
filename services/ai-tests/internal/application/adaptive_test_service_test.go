@@ -615,7 +615,7 @@ func TestSubmitAnswersFailsSessionWhenFeedbackGenerationFails(t *testing.T) {
 
 func TestBuildRoundRequestIncludesCourseContext(t *testing.T) {
 	context := testCourseContext()
-	request := buildRoundRequest(context, 5, 2, domain.StrategyTargetedPractice, nil)
+	request := buildRoundRequest(context, 5, 2, nil, domain.StrategyTargetedPractice, nil)
 
 	if request.CourseTitle != "Go" {
 		t.Fatalf("course title = %q, want Go", request.CourseTitle)
