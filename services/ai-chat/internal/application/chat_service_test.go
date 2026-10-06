@@ -257,7 +257,3 @@ func TestStreamResponseRejectsTooLongMessage(t *testing.T) {
 	}
 }
 
-func TestStreamResponseDoesNotCallLLMWhenRepositorySaveFails(t *testing.T) {
-	// covered by a dedicated failure mock below
-}
-
