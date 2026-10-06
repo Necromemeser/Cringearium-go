@@ -8,6 +8,7 @@ import Link from './components/common/Link'
 import AboutPage from './pages/AboutPage'
 import AdminPage from './pages/AdminPage'
 import CoursePage from './pages/CoursePage'
+import ChatPage from './pages/ChatPage'
 import CoursesPage from './pages/CoursesPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
@@ -53,6 +54,7 @@ function App() {
   else if (path === '/login') page = <LoginPage onLogin={handleLogin} />
   else if (path === '/register') page = <RegisterPage />
   else if (path === '/profile') page = <ProfilePage user={user} />
+  else if (path === '/chat') page = <ChatPage />
   else if (path === '/admin') page = <AdminPage user={user} />
   else {
     const match = path.match(/^\/courses\/(\d+)$/)
