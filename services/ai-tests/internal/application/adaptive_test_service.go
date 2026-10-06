@@ -65,6 +65,7 @@ func (s *AdaptiveTestService) CreateSession(
 		courseContext,
 		questionCount,
 		1,
+		topicPageID,
 		domain.StrategyInitial,
 		nil,
 	)
@@ -214,6 +215,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		courseContext,
 		session.QuestionCount,
 		2,
+		session.TopicPageID,
 		strategy,
 		[]ports.PreviousResultContext{
 			{
@@ -328,6 +330,7 @@ func buildRoundRequest(
 	c ports.CourseContext,
 	questionCount int,
 	roundNumber int,
+	topicPageID *int64,
 	strategy domain.RoundStrategy,
 	previous []ports.PreviousResultContext,
 ) ports.GenerateRoundRequest {
@@ -370,7 +373,7 @@ func buildRoundRequest(
 	}
 
 	topicTitle := ""
-	if topicPageID := topicPageIDFromContext(c, previous); topicPageID != nil {
+	if topicPageID != nil {
 		for _, topic := range c.AllowedTopics {
 			if topic.PageID == *topicPageID {
 				topicTitle = topic.Title
@@ -390,13 +393,6 @@ func buildRoundRequest(
 		AllowedTopics: topics,
 		PreviousResults: append(results, previous...),
 	}
-}
-
-func topicPageIDFromContext(c ports.CourseContext, previous []ports.PreviousResultContext) *int64 {
-	if len(previous) == 0 {
-		return nil
-	}
-	return previous[0].TopicPageID
 }
 
 func generatedRoundToDomain(
