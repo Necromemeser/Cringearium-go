@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ElementType, ReactNode } from 'react'
 
 type Block =
   | { type: 'code'; content: string; language?: string }
@@ -143,7 +143,7 @@ export default function MarkdownContent({ content }: { content: string }) {
               </pre>
             )
           case 'heading': {
-            const Tag = `h${block.level}` as keyof JSX.IntrinsicElements
+            const Tag = `h${block.level}` as ElementType
             return <Tag key={index}>{renderInline(block.content)}</Tag>
           }
           case 'list': {
