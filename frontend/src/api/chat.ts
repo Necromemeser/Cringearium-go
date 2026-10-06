@@ -17,6 +17,20 @@ export type ChatMessage = {
 
 const API_BASE = '/api'
 
+async function getErrorMessage(response: Response): Promise<string> {
+  const text = (await response.text()).trim()
+  if (!text) return `Request failed with status ${response.status}`
+
+  try {
+    const data = JSON.parse(text) as { message?: string }
+    if (data.message) return data.message
+  } catch {
+    // Response is plain text.
+  }
+
+  return text
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY)
   const response = await fetch(`${API_BASE}${path}`, {
@@ -28,10 +42,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   })
 
-  if (!response.ok) {
-    const message = (await response.text()).trim()
-    throw new Error(message || `Request failed with status ${response.status}`)
-  }
+  if (!response.ok) throw new Error(await getErrorMessage(response))
 
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
@@ -76,11 +87,7 @@ export async function streamChatMessage(
     body: JSON.stringify({ content }),
   })
 
-  if (!response.ok) {
-    const message = (await response.text()).trim()
-    throw new Error(message || `Request failed with status ${response.status}`)
-  }
-
+  if (!response.ok) throw new Error(await getErrorMessage(response))
   if (!response.body) throw new Error('Streaming is not supported by this browser')
 
   const reader = response.body.getReader()
