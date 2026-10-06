@@ -80,6 +80,11 @@ jobs:
           POSTGRES_PASSWORD=ci_password
           JWT_SECRET=ci_jwt_secret
           JWT_TTL=24h
+          LLM_BASE_URL=http://localhost:9999
+          LLM_API_KEY=ci_api_key
+          LLM_MODEL=deepseek-flash
+          DEEPSEEK_API_URL=http://localhost:9999
+          DEEPSEEK_API_KEY=ci_api_key
           EOF
 
       - name: Build containers
