@@ -17,6 +17,9 @@ func (m *MockCourseRepository) EXPECT() *MockCourseRepositoryMockRecorder { retu
 
 func (m *MockCourseRepository) CompletePage(ctx context.Context, userID, pageID int64) error { m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "CompletePage", ctx, userID, pageID); ret0, _ := ret[0].(error); return ret0 }
 func (mr *MockCourseRepositoryMockRecorder) CompletePage(ctx, userID, pageID any) *gomock.Call { mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompletePage", reflect.TypeOf((*MockCourseRepository)(nil).CompletePage), ctx, userID, pageID) }
+func (m *MockCourseRepository) FindAdminCourses(ctx context.Context) ([]domain.AdminCourse, error) { m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindAdminCourses", ctx); ret0, _ := ret[0].([]domain.AdminCourse); ret1, _ := ret[1].(error); return ret0, ret1 }
+func (mr *MockCourseRepositoryMockRecorder) FindAdminCourses(ctx any) *gomock.Call { mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAdminCourses", reflect.TypeOf((*MockCourseRepository)(nil).FindAdminCourses), ctx) }
+
 func (m *MockCourseRepository) FindAll(ctx context.Context) ([]*domain.Course, error) { m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindAll", ctx); ret0, _ := ret[0].([]*domain.Course); ret1, _ := ret[1].(error); return ret0, ret1 }
 func (mr *MockCourseRepositoryMockRecorder) FindAll(ctx any) *gomock.Call { mr.mock.ctrl.T.Helper(); return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockCourseRepository)(nil).FindAll), ctx) }
 func (m *MockCourseRepository) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, error) { m.ctrl.T.Helper(); ret := m.ctrl.Call(m, "FindByID", ctx, id); ret0, _ := ret[0].(*domain.CourseDetails); ret1, _ := ret[1].(error); return ret0, ret1 }

@@ -27,6 +27,10 @@ func (r *sessionRepositoryMock) CreateSession(_ context.Context, session domain.
 	return nil
 }
 
+func (r *sessionRepositoryMock) GetAdminStats(_ context.Context) (domain.AdminAIStats, error) {
+	return domain.AdminAIStats{}, nil
+}
+
 func (r *sessionRepositoryMock) GetSession(_ context.Context, sessionID string, userID int64) (domain.AdaptiveSession, error) {
 	session, ok := r.sessions[sessionID]
 	if !ok || session.UserID != userID {
