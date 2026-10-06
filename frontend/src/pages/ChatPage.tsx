@@ -147,7 +147,21 @@ export default function ChatPage() {
   return (
     <main className="page">
       <div className="container chat-page">
-        {error && <div className="form-error">{error}</div>}
+        {error && (
+          <div className={error.startsWith("I'm sowwy") ? 'chat-quota-notice' : 'form-error'} role="alert">
+            {error.startsWith("I'm sowwy") ? (
+              <>
+                <div className="chat-quota-icon" aria-hidden="true">🥺</div>
+                <div>
+                  <strong>Кринжик на сегодня всё</strong>
+                  <p>{error}</p>
+                </div>
+              </>
+            ) : (
+              error
+            )}
+          </div>
+        )}
 
         <div className="chat-layout">
           <aside className="chat-sidebar profile-card">
