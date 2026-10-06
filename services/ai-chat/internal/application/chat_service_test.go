@@ -122,8 +122,18 @@ func TestStreamResponseSavesUserAndAIMessage(t *testing.T) {
 	if llm.messages[3].Content != "Новый вопрос" {
 		t.Fatalf("last llm message = %+v", llm.messages[3])
 	}
-	if repo.usage != 1 {
-		t.Fatalf("usage = %d, want 1", repo.usage)
+}
+
+func TestReserveAIRequestRejectsDailyLimit(t *testing.T) {
+	repo := &repositoryMock{usageErr: ports.ErrDailyLimitReached}
+	service := NewChatService(repo, &llmMock{})
+
+	err := func() error {
+		_, err := service.ReserveAIRequest(context.Background(), 42)
+		return err
+	}()
+	if !errors.Is(err, ErrDailyLimitReached) {
+		t.Fatalf("error = %v, want ErrDailyLimitReached", err)
 	}
 }
 
@@ -146,18 +156,5 @@ func TestStreamResponseRejectsEmptyMessage(t *testing.T) {
 	service := NewChatService(&repositoryMock{}, &llmMock{})
 	if !errors.Is(service.StreamResponse(context.Background(), 1, 1, "  ", func(string) error { return nil }), ErrEmptyMessage) {
 		t.Fatal("expected ErrEmptyMessage")
-	}
-}
-
-func TestStreamResponseRejectsDailyLimit(t *testing.T) {
-	repo := &repositoryMock{
-		conversation: domain.Conversation{ID: 7, UserID: 42},
-		usageErr:     ports.ErrDailyLimitReached,
-	}
-	service := NewChatService(repo, &llmMock{})
-
-	err := service.StreamResponse(context.Background(), 7, 42, "Привет", func(string) error { return nil })
-	if !errors.Is(err, ErrDailyLimitReached) {
-		t.Fatalf("error = %v, want ErrDailyLimitReached", err)
 	}
 }
