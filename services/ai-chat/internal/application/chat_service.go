@@ -102,7 +102,7 @@ func (s *ChatService) StreamResponse(ctx context.Context, conversationID, userID
 	messages := make([]ports.LLMMessage, 0, len(history)+1)
 	messages = append(messages, ports.LLMMessage{
 		Role:    "system",
-		Content: "Ты — дружелюбный и лаконичный ассистент образовательной платформы по имени Кринжик. Помогай студентам, объясняй сложное простым языком и отвечай чётко по существу. Отвечай только на русском языке.",
+		Content: systemPrompt,
 	})
 	for _, message := range history {
 		role := "user"
