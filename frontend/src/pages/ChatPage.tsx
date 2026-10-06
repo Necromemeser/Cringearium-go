@@ -109,6 +109,8 @@ export default function ChatPage() {
       timestamp: new Date().toISOString(),
     }])
 
+    let streamSucceeded = false
+
     try {
       await streamChatMessage(activeChat, content, (event) => {
         if (event.type === 'chunk') {
@@ -122,12 +124,18 @@ export default function ChatPage() {
           setError(event.message)
         }
       })
-      const updatedChats = await listChats()
-      setChats(updatedChats)
+      streamSucceeded = true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось отправить сообщение')
       setMessages((items) => items.slice(0, -2))
     } finally {
+      if (streamSucceeded) {
+        try {
+          setChats(await listChats())
+        } catch {
+          // The response was successful; a failed sidebar refresh should not remove it.
+        }
+      }
       setSending(false)
     }
   }
