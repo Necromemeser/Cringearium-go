@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/ports"
-
 )
 
 func TestComplete(t *testing.T) {
