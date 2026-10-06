@@ -17,14 +17,14 @@ func (r *Repository) CreateConversation(ctx context.Context, conversation domain
 	err := r.db.conn.QueryRowxContext(ctx, `
 		INSERT INTO conversations (user_id, name, created_at, updated_at)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, user_id, name, created_at, updated_at
+		RETURNING id, user_id AS userid, name, created_at AS createdat, updated_at AS updatedat
 	`, conversation.UserID, conversation.Name, conversation.CreatedAt, conversation.UpdatedAt).StructScan(&result)
 	return result, err
 }
 func (r *Repository) GetConversation(ctx context.Context, id, userID int64) (domain.Conversation, error) {
 	var result domain.Conversation
 	err := r.db.conn.QueryRowxContext(ctx, `
-		SELECT id, user_id, name, created_at, updated_at FROM conversations
+		SELECT id, user_id AS userid, name, created_at AS createdat, updated_at AS updatedat FROM conversations
 		WHERE id = $1 AND user_id = $2
 	`, id, userID).StructScan(&result)
 	if errors.Is(err, sql.ErrNoRows) { return domain.Conversation{}, ports.ErrNotFound }
@@ -33,7 +33,7 @@ func (r *Repository) GetConversation(ctx context.Context, id, userID int64) (dom
 func (r *Repository) ListConversations(ctx context.Context, userID int64) ([]domain.Conversation, error) {
 	var rows []domain.Conversation
 	err := r.db.conn.SelectContext(ctx, &rows, `
-		SELECT id, user_id, name, created_at, updated_at FROM conversations
+		SELECT id, user_id AS userid, name, created_at AS createdat, updated_at AS updatedat FROM conversations
 		WHERE user_id = $1 ORDER BY updated_at DESC, id DESC
 	`, userID)
 	return rows, err
@@ -49,7 +49,7 @@ func (r *Repository) ListMessages(ctx context.Context, conversationID, userID in
 	if _, err := r.GetConversation(ctx, conversationID, userID); err != nil { return nil, err }
 	var rows []domain.Message
 	err := r.db.conn.SelectContext(ctx, &rows, `
-		SELECT id, conversation_id, user_id, content, is_ai_response, created_at
+		SELECT id, conversation_id AS conversationid, user_id, content, is_ai_response AS isairesponse, created_at AS createdat
 		FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC, id ASC
 	`, conversationID)
 	return rows, err
@@ -59,7 +59,7 @@ func (r *Repository) SaveMessage(ctx context.Context, message domain.Message) (d
 	err := r.db.conn.QueryRowxContext(ctx, `
 		INSERT INTO messages (conversation_id, user_id, content, is_ai_response)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, conversation_id, user_id, content, is_ai_response, created_at
+		RETURNING id, conversation_id AS conversationid, user_id, content, is_ai_response AS isairesponse, created_at AS createdat
 	`, message.ConversationID, message.UserID, message.Content, message.IsAIResponse).StructScan(&result)
 	if err != nil { return domain.Message{}, err }
 	_, err = r.db.conn.ExecContext(ctx, `UPDATE conversations SET updated_at = $1 WHERE id = $2`, result.CreatedAt, result.ConversationID)
