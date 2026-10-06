@@ -38,6 +38,9 @@ func (m *handlerRepositoryMock) ListMessages(context.Context, int64, int64) ([]d
 func (m *handlerRepositoryMock) SaveMessage(context.Context, domain.Message) (domain.Message, error) {
 	return domain.Message{}, nil
 }
+func (m *handlerRepositoryMock) ReserveAIRequest(context.Context, int64, int) (int, error) {
+	return 1, nil
+}
 func (m *handlerRepositoryMock) GetAdminStats(context.Context) (domain.AdminStats, error) {
 	return domain.AdminStats{}, nil
 }
