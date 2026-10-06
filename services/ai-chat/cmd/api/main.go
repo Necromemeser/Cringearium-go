@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,78 +10,55 @@ import (
 	"syscall"
 	"time"
 
+	aihttp "github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/adapters/http"
+	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/adapters/llm"
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/adapters/postgres"
+	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/application"
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+	llmURL := os.Getenv("LLM_BASE_URL")
+	llmModel := os.Getenv("LLM_MODEL")
+	if databaseURL == "" || llmURL == "" || llmModel == "" {
+		log.Error("configuration error", "missing_database_url", databaseURL == "", "missing_llm_base_url", llmURL == "", "missing_llm_model", llmModel == "")
+		os.Exit(1)
 	}
 
-	db, err := postgres.New(logger, databaseURL)
-	if err != nil {
-		log.Fatalf("database connection failed: %v", err)
-	}
+	db, err := postgres.New(log, databaseURL)
+	if err != nil { log.Error("database connection failed", "error", err); os.Exit(1) }
 	defer db.Close()
+	if err := db.Migrate(); err != nil { log.Error("migration failed", "error", err); os.Exit(1) }
 
-	if err := db.Migrate(); err != nil {
-		log.Fatalf("migration failed: %v", err)
-	}
+	repository := postgres.NewRepository(db)
+	llmClient := llm.NewClient(log, llmURL, os.Getenv("LLM_API_KEY"), llmModel)
+	service := application.NewChatService(repository, llmClient)
+	handler := aihttp.NewHandler(service)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"status":"ok"}`)
+	})
+	aihttp.RegisterRoutes(mux, handler)
 
-	server := &http.Server{
-		Addr:              ":8084",
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-
+	server := &http.Server{Addr: ":8084", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	serverErrors := make(chan error, 1)
-
 	go func() {
-		log.Println("Cringearium AI-chat started on :8084")
-
-		if err := server.ListenAndServe(); err != nil &&
-			err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- err
 		}
 	}()
-
 	shutdown := make(chan os.Signal, 1)
-	signal.Notify(
-		shutdown,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-	)
-
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case err := <-serverErrors:
-		log.Fatalf("server error: %v", err)
-
+		log.Error("server error", "error", err)
 	case sig := <-shutdown:
-		log.Printf("received signal: %v", sig)
+		log.Info("shutdown signal received", "signal", sig.String())
 	}
-
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		5*time.Second,
-	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("graceful shutdown failed: %v", err)
-	}
-
-	log.Println("Cringearium AI-chat stopped")
-}
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	fmt.Fprintln(w, `{"status":"ok"}`)
+	if err := server.Shutdown(ctx); err != nil { log.Error("graceful shutdown failed", "error", err) }
 }

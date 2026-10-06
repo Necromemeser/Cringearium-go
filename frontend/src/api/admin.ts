@@ -26,6 +26,14 @@ export type AdminAISession = {
   summary?: string
 }
 
+export type AdminChatStats = {
+  conversations: number
+  messages: number
+  user_messages: number
+  ai_messages: number
+  active_users: number
+}
+
 export type AdminAIStats = {
   total_sessions: number
   completed_sessions: number
@@ -61,4 +69,9 @@ export function getAdminCourses(token: string): Promise<AdminCourse[]> {
 
 export function getAdminAIStats(token: string): Promise<AdminAIStats> {
   return request<AdminAIStats>('/admin/ai-tests', token)
+}
+
+
+export function getAdminChatStats(token: string): Promise<AdminChatStats> {
+  return request<AdminChatStats>('/admin/ai-chat', token)
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { User } from '../api/auth'
-import { getAdminAIStats, getAdminCourses, getAdminUsers, type AdminAIStats, type AdminCourse } from '../api/admin'
+import { getAdminAIStats, getAdminChatStats, getAdminCourses, getAdminUsers, type AdminAIStats, type AdminChatStats, type AdminCourse } from '../api/admin'
 import { TOKEN_KEY } from '../constants/auth'
 import './AdminPage.css'
 
@@ -12,6 +12,7 @@ export default function AdminPage({ user }: Props) {
   const [users, setUsers] = useState<User[]>([])
   const [courses, setCourses] = useState<AdminCourse[]>([])
   const [aiStats, setAIStats] = useState<AdminAIStats | null>(null)
+  const [chatStats, setChatStats] = useState<AdminChatStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -27,11 +28,13 @@ export default function AdminPage({ user }: Props) {
       getAdminUsers(token),
       getAdminCourses(token),
       getAdminAIStats(token),
+      getAdminChatStats(token),
     ])
-      .then(([loadedUsers, loadedCourses, loadedAIStats]) => {
+      .then(([loadedUsers, loadedCourses, loadedAIStats, loadedChatStats]) => {
         setUsers(loadedUsers)
         setCourses(loadedCourses)
         setAIStats(loadedAIStats)
+        setChatStats(loadedChatStats)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить данные панели'))
       .finally(() => setLoading(false))
@@ -132,6 +135,25 @@ export default function AdminPage({ user }: Props) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className="admin-card">
+          <div className="admin-card-heading">
+            <div>
+              <span className="eyebrow">AI-ЧАТ</span>
+              <h2>Разговоры с Кринжиком</h2>
+            </div>
+            <span className="admin-count">{chatStats?.conversations ?? 0}</span>
+          </div>
+          <div className="admin-ai-grid">
+            <div><strong>{chatStats?.conversations ?? 0}</strong><span>разговоров</span></div>
+            <div><strong>{chatStats?.active_users ?? 0}</strong><span>активных пользователей</span></div>
+            <div><strong>{chatStats?.messages ?? 0}</strong><span>сообщений</span></div>
+          </div>
+          <div className="admin-ai-summary admin-chat-summary">
+            <span>сообщений пользователей: {chatStats?.user_messages ?? 0}</span>
+            <span>ответов AI: {chatStats?.ai_messages ?? 0}</span>
           </div>
         </section>
 

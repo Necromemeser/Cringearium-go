@@ -62,6 +62,9 @@ services:
     container_name: cringearium-ai-chat
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_chat?sslmode=disable
+      LLM_BASE_URL: ${DEEPSEEK_API_URL}
+      LLM_API_KEY: ${DEEPSEEK_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
     expose:
       - "8084"
     depends_on:
@@ -97,6 +100,7 @@ services:
       AUTH_URL: http://auth:8081
       COURSES_URL: http://courses:8082
       AI_TESTS_URL: http://ai-tests:8085
+      AI_CHAT_URL: http://ai-chat:8084
     ports:
       - "8080:8080"
     depends_on:
@@ -105,6 +109,8 @@ services:
       courses:
         condition: service_started
       ai-tests:
+        condition: service_started
+      ai-chat:
         condition: service_started
 
   frontend:

@@ -25,6 +25,7 @@ type Gateway struct {
 	authURL     *url.URL
 	coursesURL  *url.URL
 	aiTestsURL  *url.URL
+	aiChatURL   *url.URL
 	client      *http.Client
 	log         *slog.Logger
 }
@@ -41,6 +42,8 @@ func main() {
 		log.Fatal(err)
 	}
 	aiTestsURL, err := serviceURL("AI_TESTS_URL", "http://ai-tests:8085")
+	if err != nil { log.Fatal(err) }
+	aiChatURL, err := serviceURL("AI_CHAT_URL", "http://ai-chat:8084")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,6 +52,7 @@ func main() {
 		authURL: authURL,
 		coursesURL: coursesURL,
 		aiTestsURL: aiTestsURL,
+		aiChatURL: aiChatURL,
 		client: &http.Client{Timeout: 5 * time.Second},
 		log: logger,
 	}
@@ -77,6 +81,16 @@ func main() {
 		mux.Handle("GET /api/admin/users", gateway.adminProxy(gateway.authURL, "/api/auth/users"))
 		mux.Handle("GET /api/admin/courses", gateway.adminProxy(gateway.coursesURL, "/internal/admin/courses"))
 		mux.Handle("GET /api/admin/ai-tests", gateway.adminProxy(gateway.aiTestsURL, "/internal/admin/adaptive-tests"))
+
+	mux.Handle("GET /api/chats", gateway.aiChatProxy(true))
+	mux.Handle("POST /api/chats", gateway.aiChatProxy(true))
+	mux.Handle("GET /api/chats/{id}", gateway.aiChatProxy(true))
+	mux.Handle("DELETE /api/chats/{id}", gateway.aiChatProxy(true))
+	mux.Handle("GET /api/chats/{chatId}/messages", gateway.aiChatProxy(true))
+	mux.Handle("GET /api/messages/chat/{chatId}", gateway.aiChatProxy(true))
+	mux.Handle("POST /api/messages/send", gateway.aiChatProxy(true))
+	mux.Handle("POST /api/deepseek", gateway.aiChatProxy(true))
+	mux.Handle("GET /api/admin/ai-chat", gateway.adminProxy(gateway.aiChatURL, "/internal/admin/chat-stats"))
 
 	server := &http.Server{
 		Addr:              envOrDefault("SERVER_ADDR", ":8080"),
@@ -125,6 +139,12 @@ func (g *Gateway) coursesProxy(protected bool) http.Handler {
 	if !protected {
 		return proxy
 	}
+	return g.requireAuth(proxy)
+}
+
+func (g *Gateway) aiChatProxy(protected bool) http.Handler {
+	proxy := g.reverseProxy(g.aiChatURL, true)
+	if !protected { return proxy }
 	return g.requireAuth(proxy)
 }
 
