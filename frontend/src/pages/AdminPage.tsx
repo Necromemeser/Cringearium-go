@@ -13,6 +13,7 @@ export default function AdminPage({ user }: Props) {
   const [courses, setCourses] = useState<AdminCourse[]>([])
   const [aiStats, setAIStats] = useState<AdminAIStats | null>(null)
   const [chatStats, setChatStats] = useState<AdminChatStats | null>(null)
+  const [chatStatsError, setChatStatsError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -28,16 +29,18 @@ export default function AdminPage({ user }: Props) {
       getAdminUsers(token),
       getAdminCourses(token),
       getAdminAIStats(token),
-      getAdminChatStats(token),
     ])
-      .then(([loadedUsers, loadedCourses, loadedAIStats, loadedChatStats]) => {
+      .then(([loadedUsers, loadedCourses, loadedAIStats]) => {
         setUsers(loadedUsers)
         setCourses(loadedCourses)
         setAIStats(loadedAIStats)
-        setChatStats(loadedChatStats)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить данные панели'))
       .finally(() => setLoading(false))
+
+    getAdminChatStats(token)
+      .then(setChatStats)
+      .catch((e) => setChatStatsError(e instanceof Error ? e.message : 'Не удалось загрузить статистику AI-чата'))
   }, [token, user?.role])
 
   if (!user || user.role !== 'admin') {
@@ -146,15 +149,21 @@ export default function AdminPage({ user }: Props) {
             </div>
             <span className="admin-count">{chatStats?.conversations ?? 0}</span>
           </div>
-          <div className="admin-ai-grid">
-            <div><strong>{chatStats?.conversations ?? 0}</strong><span>разговоров</span></div>
-            <div><strong>{chatStats?.active_users ?? 0}</strong><span>активных пользователей</span></div>
-            <div><strong>{chatStats?.messages ?? 0}</strong><span>сообщений</span></div>
-          </div>
-          <div className="admin-ai-summary admin-chat-summary">
-            <span>сообщений пользователей: {chatStats?.user_messages ?? 0}</span>
-            <span>ответов AI: {chatStats?.ai_messages ?? 0}</span>
-          </div>
+          {chatStatsError ? (
+            <div className="admin-section-error">Не удалось загрузить статистику AI-чата: {chatStatsError}</div>
+          ) : (
+            <>
+              <div className="admin-ai-grid">
+                <div><strong>{chatStats?.conversations ?? 0}</strong><span>разговоров</span></div>
+                <div><strong>{chatStats?.active_users ?? 0}</strong><span>активных пользователей</span></div>
+                <div><strong>{chatStats?.messages ?? 0}</strong><span>сообщений</span></div>
+              </div>
+              <div className="admin-ai-summary admin-chat-summary">
+                <span>сообщений пользователей: {chatStats?.user_messages ?? 0}</span>
+                <span>ответов AI: {chatStats?.ai_messages ?? 0}</span>
+              </div>
+            </>
+          )}
         </section>
 
         <section className="admin-card">
