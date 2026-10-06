@@ -13,10 +13,12 @@ import (
 var (
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrEmptyMessage         = errors.New("input is empty")
+	ErrDailyLimitReached    = errors.New("daily ai request limit reached")
 )
 
 const maxMessageLength = 32 * 1024
 const maxHistoryMessages = 40
+const dailyRequestLimit = 10
 
 type ChatService struct {
 	repository ports.Repository
@@ -79,6 +81,13 @@ func (s *ChatService) StreamResponse(ctx context.Context, conversationID, userID
 	}
 
 	if _, err := s.GetConversation(ctx, conversationID, userID); err != nil {
+		return err
+	}
+
+	if _, err := s.repository.ReserveAIRequest(ctx, userID, dailyRequestLimit); err != nil {
+		if errors.Is(err, ports.ErrDailyLimitReached) {
+			return ErrDailyLimitReached
+		}
 		return err
 	}
 
