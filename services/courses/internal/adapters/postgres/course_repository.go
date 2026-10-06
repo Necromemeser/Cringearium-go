@@ -33,6 +33,60 @@ func (db *DB) FindAll(ctx context.Context) ([]*domain.Course, error) {
 	return courses, nil
 }
 
+func (db *DB) FindAdminCourses(ctx context.Context) ([]domain.AdminCourse, error) {
+	const query = `
+		SELECT
+			c.id,
+			c.title,
+			COALESCE(c.theme, ''),
+			COALESCE(c.description, ''),
+			c.price,
+			c.author_id,
+			c.status,
+			COUNT(DISTINCT ca.user_id),
+			COUNT(DISTINCT s.id),
+			COUNT(DISTINCT p.id)
+		FROM courses c
+		LEFT JOIN course_access ca ON ca.course_id = c.id
+		LEFT JOIN course_sections s ON s.course_id = c.id
+		LEFT JOIN course_pages p ON p.section_id = s.id
+		GROUP BY c.id
+		ORDER BY c.id
+	`
+
+	rows, err := db.conn.QueryxContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	courses := make([]domain.AdminCourse, 0)
+	for rows.Next() {
+		var course domain.AdminCourse
+		if err := rows.Scan(
+			&course.ID,
+			&course.Title,
+			&course.Theme,
+			&course.Description,
+			&course.Price,
+			&course.AuthorID,
+			&course.Status,
+			&course.EnrolledUsers,
+			&course.SectionCount,
+			&course.PageCount,
+		); err != nil {
+			return nil, err
+		}
+		courses = append(courses, course)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return courses, nil
+}
+
 func (db *DB) FindByID(ctx context.Context, id int64) (*domain.CourseDetails, error) {
 	course := new(domain.Course)
 	const courseQuery = `

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/application"
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
@@ -76,6 +77,69 @@ type feedbackResponse struct {
 	MasteredTopics []domain.TopicFeedback `json:"mastered_topics"`
 	TopicsToReview []domain.TopicFeedback `json:"topics_to_review"`
 	NextSteps      []domain.NextStep      `json:"next_steps"`
+}
+
+type adminAIStatsResponse struct {
+	TotalSessions      int64            `json:"total_sessions"`
+	CompletedSessions  int64            `json:"completed_sessions"`
+	FailedSessions     int64            `json:"failed_sessions"`
+	QuestionsGenerated int64            `json:"questions_generated"`
+	AnswersSubmitted   int64            `json:"answers_submitted"`
+	AccuracyPercent    float64          `json:"accuracy_percent"`
+	RecentSessions     []adminAISession `json:"recent_sessions"`
+}
+
+type adminAISession struct {
+	ID            string               `json:"id"`
+	UserID        int64                `json:"user_id"`
+	CourseID      int64                `json:"course_id"`
+	TopicPageID   *int64               `json:"topic_page_id,omitempty"`
+	Status        domain.SessionStatus `json:"status"`
+	CurrentRound  int                  `json:"current_round"`
+	QuestionCount int                  `json:"question_count"`
+	CreatedAt     string               `json:"created_at"`
+	CompletedAt   *string              `json:"completed_at,omitempty"`
+	Summary       string               `json:"summary,omitempty"`
+}
+
+func (h *Handler) GetAdminStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.service.GetAdminStats(r.Context())
+	if err != nil {
+		h.logger.Error("failed to get adaptive admin stats", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	response := adminAIStatsResponse{
+		TotalSessions: stats.TotalSessions,
+		CompletedSessions: stats.CompletedSessions,
+		FailedSessions: stats.FailedSessions,
+		QuestionsGenerated: stats.QuestionsGenerated,
+		AnswersSubmitted: stats.AnswersSubmitted,
+		AccuracyPercent: stats.AccuracyPercent,
+		RecentSessions: make([]adminAISession, 0, len(stats.RecentSessions)),
+	}
+
+	for _, session := range stats.RecentSessions {
+		item := adminAISession{
+			ID: session.ID,
+			UserID: session.UserID,
+			CourseID: session.CourseID,
+			TopicPageID: session.TopicPageID,
+			Status: session.Status,
+			CurrentRound: session.CurrentRound,
+			QuestionCount: session.QuestionCount,
+			CreatedAt: session.CreatedAt.Format(time.RFC3339),
+			Summary: session.Summary,
+		}
+		if session.CompletedAt != nil {
+			value := session.CompletedAt.Format(time.RFC3339)
+			item.CompletedAt = &value
+		}
+		response.RecentSessions = append(response.RecentSessions, item)
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {

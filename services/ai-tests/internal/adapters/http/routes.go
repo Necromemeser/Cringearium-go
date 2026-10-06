@@ -6,4 +6,5 @@ func RegisterRoutes(mux *http.ServeMux, handler *Handler) {
 	mux.HandleFunc("POST /api/adaptive-tests", handler.CreateSession)
 	mux.HandleFunc("GET /api/adaptive-tests/{sessionId}", handler.GetSession)
 	mux.HandleFunc("POST /api/adaptive-tests/{sessionId}/answers", handler.SubmitAnswers)
+	mux.HandleFunc("GET /internal/admin/adaptive-tests", handler.GetAdminStats)
 }

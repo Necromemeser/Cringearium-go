@@ -18,6 +18,8 @@ type SessionRepository interface {
 		userID int64,
 	) (domain.AdaptiveSession, error)
 
+	GetAdminStats(ctx context.Context) (domain.AdminAIStats, error)
+
 	SaveRound(
 		ctx context.Context,
 		round domain.AdaptiveRound,

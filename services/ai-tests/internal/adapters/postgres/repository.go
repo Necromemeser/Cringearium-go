@@ -83,6 +83,88 @@ func (r *Repository) GetSession(ctx context.Context, sessionID string, userID in
 	return session, nil
 }
 
+func (r *Repository) GetAdminStats(ctx context.Context) (domain.AdminAIStats, error) {
+	var stats domain.AdminAIStats
+
+	if err := r.db.GetContext(ctx, &stats.TotalSessions, `SELECT COUNT(*) FROM adaptive_sessions`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+	if err := r.db.GetContext(ctx, &stats.CompletedSessions, `SELECT COUNT(*) FROM adaptive_sessions WHERE status = 'completed'`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+	if err := r.db.GetContext(ctx, &stats.FailedSessions, `SELECT COUNT(*) FROM adaptive_sessions WHERE status = 'failed'`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+	if err := r.db.GetContext(ctx, &stats.QuestionsGenerated, `SELECT COUNT(*) FROM adaptive_questions`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+	if err := r.db.GetContext(ctx, &stats.AnswersSubmitted, `SELECT COUNT(*) FROM adaptive_answers`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+
+	var accuracy sql.NullFloat64
+	if err := r.db.GetContext(ctx, &accuracy, `
+		SELECT AVG(CASE WHEN is_correct THEN 100.0 ELSE 0.0 END)
+		FROM adaptive_answers
+	`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+	if accuracy.Valid {
+		stats.AccuracyPercent = accuracy.Float64
+	}
+
+	var rows []struct {
+		ID            string     `db:"id"`
+		UserID        int64      `db:"user_id"`
+		CourseID      int64      `db:"course_id"`
+		TopicPageID   *int64     `db:"topic_page_id"`
+		Status        string     `db:"status"`
+		CurrentRound  int        `db:"current_round"`
+		QuestionCount int        `db:"question_count"`
+		CreatedAt     time.Time  `db:"created_at"`
+		CompletedAt   *time.Time `db:"completed_at"`
+		Summary       sql.NullString `db:"summary"`
+	}
+
+	if err := r.db.SelectContext(ctx, &rows, `
+		SELECT
+			s.id,
+			s.user_id,
+			s.course_id,
+			s.topic_page_id,
+			s.status,
+			s.current_round,
+			s.question_count,
+			s.created_at,
+			s.completed_at,
+			COALESCE(f.summary, '') AS summary
+		FROM adaptive_sessions s
+		LEFT JOIN adaptive_feedback f ON f.session_id = s.id
+		ORDER BY s.created_at DESC
+		LIMIT 20
+	`); err != nil {
+		return domain.AdminAIStats{}, err
+	}
+
+	stats.RecentSessions = make([]domain.AdminAISession, 0, len(rows))
+	for _, row := range rows {
+		stats.RecentSessions = append(stats.RecentSessions, domain.AdminAISession{
+			ID: row.ID,
+			UserID: row.UserID,
+			CourseID: row.CourseID,
+			TopicPageID: row.TopicPageID,
+			Status: domain.SessionStatus(row.Status),
+			CurrentRound: row.CurrentRound,
+			QuestionCount: row.QuestionCount,
+			CreatedAt: row.CreatedAt,
+			CompletedAt: row.CompletedAt,
+			Summary: row.Summary.String,
+		})
+	}
+
+	return stats, nil
+}
+
 func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) (domain.AdaptiveRound, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {

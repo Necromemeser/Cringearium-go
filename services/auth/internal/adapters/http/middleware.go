@@ -26,7 +26,6 @@ func NewMiddleware(tokens ports.TokenService) *Middleware {
 func (m *Middleware) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
-
 		parts := strings.Fields(header)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -42,6 +41,23 @@ func (m *Middleware) Auth(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), userContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (m *Middleware) Admin(next http.Handler) http.Handler {
+	return m.Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := UserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		if user.Role != domain.RoleAdmin {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}))
 }
 
 func UserFromContext(ctx context.Context) (*domain.User, bool) {

@@ -24,6 +24,19 @@ type courseResponse struct {
 	AuthorID    *int64              `json:"author_id,omitempty"`
 	Status      domain.CourseStatus `json:"status"`
 }
+type adminCourseResponse struct {
+	ID            int64               `json:"id"`
+	Title         string              `json:"title"`
+	Theme         string              `json:"theme,omitempty"`
+	Description   string              `json:"description,omitempty"`
+	Price         int                 `json:"price"`
+	AuthorID      *int64              `json:"author_id,omitempty"`
+	Status        domain.CourseStatus `json:"status"`
+	EnrolledUsers int                 `json:"enrolled_users"`
+	SectionCount  int                 `json:"section_count"`
+	PageCount     int                 `json:"page_count"`
+}
+
 type courseDetailsResponse struct {
 	ID          int64                    `json:"id"`
 	Title       string                   `json:"title"`
@@ -48,6 +61,32 @@ type pageResponse struct {
 	Type     domain.PageType `json:"type"`
 	Content  string          `json:"content,omitempty"`
 	Position int             `json:"position"`
+}
+
+func (h *Handler) GetAdminCourses(w http.ResponseWriter, r *http.Request) {
+	courses, err := h.courses.GetAdminCourses(r.Context())
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	response := make([]adminCourseResponse, 0, len(courses))
+	for _, course := range courses {
+		response = append(response, adminCourseResponse{
+			ID:            course.ID,
+			Title:         course.Title,
+			Theme:         course.Theme,
+			Description:   course.Description,
+			Price:         course.Price,
+			AuthorID:      course.AuthorID,
+			Status:        course.Status,
+			EnrolledUsers: course.EnrolledUsers,
+			SectionCount:  course.SectionCount,
+			PageCount:     course.PageCount,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {

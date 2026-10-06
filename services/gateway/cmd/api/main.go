@@ -17,7 +17,8 @@ import (
 )
 
 type userResponse struct {
-	ID int64 `json:"id"`
+	ID   int64  `json:"id"`
+	Role string `json:"role"`
 }
 
 type Gateway struct {
@@ -71,7 +72,11 @@ func main() {
 
 	mux.Handle("POST /api/adaptive-tests", gateway.aiTestsProxy(true))
 	mux.Handle("GET /api/adaptive-tests/{sessionId}", gateway.aiTestsProxy(true))
-	mux.Handle("POST /api/adaptive-tests/{sessionId}/answers", gateway.aiTestsProxy(true))
+		mux.Handle("POST /api/adaptive-tests/{sessionId}/answers", gateway.aiTestsProxy(true))
+
+		mux.Handle("GET /api/admin/users", gateway.adminProxy(gateway.authURL, "/api/auth/users"))
+		mux.Handle("GET /api/admin/courses", gateway.adminProxy(gateway.coursesURL, "/internal/admin/courses"))
+		mux.Handle("GET /api/admin/ai-tests", gateway.adminProxy(gateway.aiTestsURL, "/internal/admin/adaptive-tests"))
 
 	server := &http.Server{
 		Addr:              envOrDefault("SERVER_ADDR", ":8080"),
@@ -133,45 +138,8 @@ func (g *Gateway) aiTestsProxy(protected bool) http.Handler {
 
 func (g *Gateway) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Fields(r.Header.Get("Authorization"))
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		req, err := http.NewRequestWithContext(
-			r.Context(),
-			http.MethodGet,
-			g.authURL.String()+"/api/auth/me",
-			nil,
-		)
-		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-		req.Header.Set("Authorization", "Bearer "+parts[1])
-
-		resp, err := g.client.Do(req)
-		if err != nil {
-			g.log.Error("auth service request failed", "error", err)
-			http.Error(w, "authentication service unavailable", http.StatusBadGateway)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusUnauthorized {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if resp.StatusCode != http.StatusOK {
-			g.log.Error("auth service returned unexpected status", "status", resp.StatusCode)
-			http.Error(w, "authentication service error", http.StatusBadGateway)
-			return
-		}
-
-		var user userResponse
-		if err := json.NewDecoder(resp.Body).Decode(&user); err != nil || user.ID <= 0 {
-			http.Error(w, "authentication service error", http.StatusBadGateway)
+		user, ok := g.authenticate(w, r)
+		if !ok {
 			return
 		}
 
@@ -179,6 +147,84 @@ func (g *Gateway) requireAuth(next http.Handler) http.Handler {
 		r.Header.Set("X-User-ID", strconv.FormatInt(user.ID, 10))
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (g *Gateway) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := g.authenticate(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (g *Gateway) authenticate(w http.ResponseWriter, r *http.Request) (userResponse, bool) {
+	parts := strings.Fields(r.Header.Get("Authorization"))
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return userResponse{}, false
+	}
+
+	req, err := http.NewRequestWithContext(
+		r.Context(),
+		http.MethodGet,
+		g.authURL.String()+"/api/auth/me",
+		nil,
+	)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return userResponse{}, false
+	}
+	req.Header.Set("Authorization", "Bearer "+parts[1])
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		g.log.Error("auth service request failed", "error", err)
+		http.Error(w, "authentication service unavailable", http.StatusBadGateway)
+		return userResponse{}, false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return userResponse{}, false
+	}
+	if resp.StatusCode != http.StatusOK {
+		g.log.Error("auth service returned unexpected status", "status", resp.StatusCode)
+		http.Error(w, "authentication service error", http.StatusBadGateway)
+		return userResponse{}, false
+	}
+
+	var user userResponse
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil || user.ID <= 0 {
+		http.Error(w, "authentication service error", http.StatusBadGateway)
+		return userResponse{}, false
+	}
+
+	return user, true
+}
+
+func (g *Gateway) adminProxy(target *url.URL, upstreamPath string) http.Handler {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	originalDirector := proxy.Director
+
+	proxy.Director = func(r *http.Request) {
+		originalDirector(r)
+		r.URL.Path = upstreamPath
+		r.URL.RawPath = ""
+	}
+
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		g.log.Error("upstream admin request failed", "path", r.URL.Path, "error", err)
+		http.Error(w, "bad gateway", http.StatusBadGateway)
+	}
+
+	return g.requireAdmin(proxy)
 }
 
 func (g *Gateway) reverseProxy(target *url.URL, stripAuth bool) http.Handler {

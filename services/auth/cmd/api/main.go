@@ -55,8 +55,8 @@ func main() {
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("POST /api/auth/register", handler.Register)
 	mux.HandleFunc("POST /api/auth/login", handler.Login)
-	mux.HandleFunc("GET /api/auth/users/{id}", handler.GetByID)
-	mux.HandleFunc("GET /api/auth/users", handler.GetUser)
+	mux.Handle("GET /api/auth/users/{id}", middleware.Admin(http.HandlerFunc(handler.GetByID)))
+	mux.Handle("GET /api/auth/users", middleware.Admin(http.HandlerFunc(handler.GetUser)))
 	mux.Handle("GET /api/auth/me", middleware.Auth(http.HandlerFunc(handler.Me)))
 
 	server := &http.Server{

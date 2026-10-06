@@ -6,6 +6,7 @@ import Footer from './components/common/Footer'
 import Header from './components/common/Header'
 import Link from './components/common/Link'
 import AboutPage from './pages/AboutPage'
+import AdminPage from './pages/AdminPage'
 import CoursePage from './pages/CoursePage'
 import CoursesPage from './pages/CoursesPage'
 import HomePage from './pages/HomePage'
@@ -52,6 +53,7 @@ function App() {
   else if (path === '/login') page = <LoginPage onLogin={handleLogin} />
   else if (path === '/register') page = <RegisterPage />
   else if (path === '/profile') page = <ProfilePage user={user} />
+  else if (path === '/admin') page = <AdminPage user={user} />
   else {
     const match = path.match(/^\/courses\/(\d+)$/)
     page = match ? <CoursePage courseId={Number(match[1])} user={user} /> : (

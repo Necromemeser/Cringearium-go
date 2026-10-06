@@ -45,6 +45,11 @@ func NewAdaptiveTestService(
 	}
 }
 
+func (s *AdaptiveTestService) GetAdminStats(ctx context.Context) (domain.AdminAIStats, error) {
+	return s.repository.GetAdminStats(ctx)
+}
+
+
 func (s *AdaptiveTestService) CreateSession(
 	ctx context.Context,
 	userID int64,

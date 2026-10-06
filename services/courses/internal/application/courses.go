@@ -32,6 +32,10 @@ func (c *Courses) GetAll(ctx context.Context) ([]*domain.Course, error) {
 	return c.repository.FindAll(ctx)
 }
 
+func (c *Courses) GetAdminCourses(ctx context.Context) ([]domain.AdminCourse, error) {
+	return c.repository.FindAdminCourses(ctx)
+}
+
 func (c *Courses) GetByID(ctx context.Context, id int64) (*domain.CourseDetails, error) {
 	course, err := c.repository.FindByID(ctx, id)
 	if err != nil {
