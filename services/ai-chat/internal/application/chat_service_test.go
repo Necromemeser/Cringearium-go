@@ -53,6 +53,9 @@ func (m *repositoryMock) SaveMessage(_ context.Context, message domain.Message) 
 	return message, nil
 }
 
+func (m *repositoryMock) UpdateConversationName(context.Context, int64, int64, string) error {
+	return nil
+}
 func (m *repositoryMock) ReserveAIRequest(context.Context, int64, int) (int, error) {
 	if m.usageErr != nil {
 		return 0, m.usageErr
@@ -67,6 +70,10 @@ func (m *repositoryMock) GetAdminStats(context.Context) (domain.AdminStats, erro
 
 type llmMock struct {
 	messages []ports.LLMMessage
+}
+
+func (m *llmMock) Complete(context.Context, []ports.LLMMessage) (string, error) {
+	return "Учебный чат", nil
 }
 
 func (m *llmMock) Stream(_ context.Context, messages []ports.LLMMessage, onChunk func(string) error) (string, error) {
