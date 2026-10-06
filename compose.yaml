@@ -62,8 +62,8 @@ services:
     container_name: cringearium-ai-chat
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_chat?sslmode=disable
-      LLM_BASE_URL: ${DEEPSEEK_API_URL}
-      LLM_API_KEY: ${DEEPSEEK_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL}
     expose:
       - "8084"
