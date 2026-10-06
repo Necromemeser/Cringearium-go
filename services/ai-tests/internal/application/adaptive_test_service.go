@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"crypto/rand"
@@ -119,6 +120,9 @@ func (s *AdaptiveTestService) GetSession(ctx context.Context, userID int64, sess
 	}
 	session, err := s.repository.GetSession(ctx, sessionID, userID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.AdaptiveSession{}, ErrRoundNotFound
+		}
 		return domain.AdaptiveSession{}, err
 	}
 	return session, nil
@@ -365,8 +369,19 @@ func buildRoundRequest(
 		})
 	}
 
+	topicTitle := ""
+	if topicPageID := topicPageIDFromContext(c, previous); topicPageID != nil {
+		for _, topic := range c.AllowedTopics {
+			if topic.PageID == *topicPageID {
+				topicTitle = topic.Title
+				break
+			}
+		}
+	}
+
 	return ports.GenerateRoundRequest{
 		CourseTitle: c.CourseTitle,
+		TopicTitle: topicTitle,
 		Materials: materials,
 		OrdinaryTests: tests,
 		QuestionCount: questionCount,
@@ -375,6 +390,13 @@ func buildRoundRequest(
 		AllowedTopics: topics,
 		PreviousResults: append(results, previous...),
 	}
+}
+
+func topicPageIDFromContext(c ports.CourseContext, previous []ports.PreviousResultContext) *int64 {
+	if len(previous) == 0 {
+		return nil
+	}
+	return previous[0].TopicPageID
 }
 
 func generatedRoundToDomain(
@@ -396,7 +418,13 @@ func generatedRoundToDomain(
 			})
 		}
 
-		sources := make([]domain.QuestionSource, 0)
+		sources := make([]domain.QuestionSource, 0, len(question.Sources))
+		for _, source := range question.Sources {
+			sources = append(sources, domain.QuestionSource{
+				Title: source.Title,
+				URL:   source.URL,
+			})
+		}
 
 		questions = append(questions, domain.AdaptiveQuestion{
 			RoundID:          0,
