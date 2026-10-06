@@ -86,10 +86,8 @@ func main() {
 	mux.Handle("POST /api/chats", gateway.aiChatProxy(true))
 	mux.Handle("GET /api/chats/{id}", gateway.aiChatProxy(true))
 	mux.Handle("DELETE /api/chats/{id}", gateway.aiChatProxy(true))
-	mux.Handle("GET /api/chats/{chatId}/messages", gateway.aiChatProxy(true))
-	mux.Handle("GET /api/messages/chat/{chatId}", gateway.aiChatProxy(true))
-	mux.Handle("POST /api/messages/send", gateway.aiChatProxy(true))
-	mux.Handle("POST /api/deepseek", gateway.aiChatProxy(true))
+	mux.Handle("GET /api/chats/{id}/messages", gateway.aiChatProxy(true))
+	mux.Handle("POST /api/chats/{id}/messages", gateway.aiChatProxy(true))
 	mux.Handle("GET /api/admin/ai-chat", gateway.adminProxy(gateway.aiChatURL, "/internal/admin/chat-stats"))
 
 	server := &http.Server{
