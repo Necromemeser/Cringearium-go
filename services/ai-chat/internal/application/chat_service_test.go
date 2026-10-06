@@ -47,6 +47,7 @@ func (m *repositoryMock) SaveMessage(_ context.Context, message domain.Message) 
 	message.ID = int64(len(m.saved) + 1)
 	message.CreatedAt = time.Now()
 	m.saved = append(m.saved, message)
+	m.messages = append(m.messages, message)
 	return message, nil
 }
 
