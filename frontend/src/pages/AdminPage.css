@@ -192,3 +192,9 @@
     flex-wrap: wrap;
   }
 }
+
+.admin-section-error {
+  padding: 22px 24px;
+  color: var(--muted);
+  font-size: .9rem;
+}
