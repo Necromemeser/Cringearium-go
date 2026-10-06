@@ -38,6 +38,9 @@ func (m *handlerRepositoryMock) ListMessages(context.Context, int64, int64) ([]d
 func (m *handlerRepositoryMock) SaveMessage(context.Context, domain.Message) (domain.Message, error) {
 	return domain.Message{}, nil
 }
+func (m *handlerRepositoryMock) UpdateConversationName(context.Context, int64, int64, string) error {
+	return nil
+}
 func (m *handlerRepositoryMock) ReserveAIRequest(context.Context, int64, int) (int, error) {
 	return 1, nil
 }
@@ -46,6 +49,10 @@ func (m *handlerRepositoryMock) GetAdminStats(context.Context) (domain.AdminStat
 }
 
 type handlerLLMMock struct{}
+
+func (handlerLLMMock) Complete(context.Context, []ports.LLMMessage) (string, error) {
+	return "Учебный чат", nil
+}
 
 func (handlerLLMMock) Stream(_ context.Context, _ []ports.LLMMessage, onChunk func(string) error) (string, error) {
 	if err := onChunk("ответ"); err != nil {
