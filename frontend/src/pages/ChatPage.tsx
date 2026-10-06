@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Chat, ChatMessage } from '../api/chat'
 import { createChat, deleteChat, getChatMessages, listChats, streamChatMessage } from '../api/chat'
 import { TOKEN_KEY } from '../constants/auth'
@@ -12,6 +12,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!localStorage.getItem(TOKEN_KEY)) {
@@ -38,6 +39,13 @@ export default function ChatPage() {
       .then(setMessages)
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить сообщения'))
   }, [activeChat])
+
+  useEffect(() => {
+    const container = messagesRef.current
+    if (!container) return
+
+    container.scrollTop = container.scrollHeight
+  }, [messages])
 
   async function handleCreateChat() {
     try {
@@ -162,7 +170,7 @@ export default function ChatPage() {
               </div>
             ) : (
               <>
-                <div className="chat-messages">
+                <div ref={messagesRef} className="chat-messages">
                   {messages.map((message) => (
                     <div key={message.id} className={`chat-message ${message.isAiResponse ? 'assistant' : 'user'}`}>
                       <div className="chat-message-author">{message.isAiResponse ? 'Кринжик' : 'Вы'}</div>
