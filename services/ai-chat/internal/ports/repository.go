@@ -2,9 +2,12 @@ package ports
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/domain"
 )
+
+var ErrNotFound = errors.New("conversation not found")
 
 type Repository interface {
 	CreateConversation(ctx context.Context, conversation domain.Conversation) (domain.Conversation, error)
