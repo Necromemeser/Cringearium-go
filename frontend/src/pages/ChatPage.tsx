@@ -68,14 +68,21 @@ export default function ChatPage() {
     }
   }
 
-  async function handleDeleteChat() {
-    if (activeChat === null) return
+  async function handleDeleteChat(chatId: number) {
+    if (sending) return
+
     try {
-      await deleteChat(activeChat)
-      const remaining = chats.filter((chat) => chat.id !== activeChat)
+      setError('')
+      await deleteChat(chatId)
+
+      const remaining = chats.filter((chat) => chat.id !== chatId)
       setChats(remaining)
-      setActiveChat(remaining[0]?.id ?? null)
-      setMessages(remaining.length ? await getChatMessages(remaining[0].id) : [])
+
+      if (activeChat !== chatId) return
+
+      const nextChat = remaining[0]
+      setActiveChat(nextChat?.id ?? null)
+      setMessages(nextChat ? await getChatMessages(nextChat.id) : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось удалить чат')
     }
@@ -130,7 +137,7 @@ export default function ChatPage() {
     void handleSend()
   }
 
-  async function handleSelectChat(id: number) {
+  function handleSelectChat(id: number) {
     if (sending) return
     setActiveChat(id)
   }
@@ -138,109 +145,96 @@ export default function ChatPage() {
   if (loading) return <main className="page"><div className="container loading-screen">Загружаем Кринжика...</div></main>
 
   return (
-    <main className="chat-page">
-      <aside className="chat-sidebar">
-        <div className="chat-sidebar-header">
-          <div className="chat-brand">Кринжик</div>
-          <button type="button" className="chat-new" onClick={handleCreateChat} disabled={sending}>
-            <span>＋</span>
-            Новый чат
-          </button>
-        </div>
+    <main className="page">
+      <div className="container chat-page">
+        {error && <div className="form-error">{error}</div>}
 
-        <div className="chat-history">
-          {chats.length === 0 ? (
-            <div className="chat-history-empty">Здесь появятся ваши чаты</div>
-          ) : (
-            chats.map((chat) => (
-              <button
-                type="button"
-                key={chat.id}
-                className={`chat-item${activeChat === chat.id ? ' active' : ''}`}
-                onClick={() => handleSelectChat(chat.id)}
-              >
-                <span className="chat-item-icon">◌</span>
-                <span className="chat-item-name">{chat.chatName}</span>
-              </button>
-            ))
-          )}
-        </div>
-
-        {activeChat !== null && (
-          <button type="button" className="chat-delete" onClick={handleDeleteChat} disabled={sending}>
-            Удалить текущий чат
-          </button>
-        )}
-      </aside>
-
-      <section className="chat-panel">
-        <header className="chat-header">
-          <div>
-            <div className="chat-header-title">Кринжик</div>
-            <div className="chat-header-subtitle">Персональный ИИ-помощник</div>
-          </div>
-        </header>
-
-        {error && <div className="chat-error">{error}</div>}
-
-        {activeChat === null ? (
-          <div className="chat-empty">
-            <div className="chat-empty-icon">✦</div>
-            <h1>Чем могу помочь?</h1>
-            <p>Разберём учебный материал, решим задачу или просто обсудим вопрос.</p>
-            <button type="button" className="button button-primary" onClick={handleCreateChat}>Начать новый чат</button>
-          </div>
-        ) : (
-          <>
-            <div ref={messagesRef} className="chat-messages" onScroll={handleMessagesScroll}>
-              <div className="chat-messages-inner">
-                {messages.length === 0 && (
-                  <div className="chat-welcome">
-                    <div className="chat-welcome-icon">✦</div>
-                    <h1>Чем могу помочь?</h1>
-                    <p>Задайте вопрос Кринжику. Он поможет разобраться с учебными материалами.</p>
-                  </div>
-                )}
-
-                {messages.map((message) => (
-                  <div key={message.id} className={`chat-message ${message.isAiResponse ? 'assistant' : 'user'}`}>
-                    {message.isAiResponse && <div className="chat-avatar">К</div>}
-                    <div className="chat-message-body">
-                      <div className="chat-message-author">{message.isAiResponse ? 'Кринжик' : 'Вы'}</div>
-                      <div className="chat-message-content">
-                        {message.isAiResponse ? (
-                          message.content ? <MarkdownContent content={message.content} /> : (sending ? '...' : '')
-                        ) : (
-                          message.content
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <form className="chat-input-wrap" onSubmit={(event) => { event.preventDefault(); void handleSend() }}>
-              <div className="chat-input">
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder="Сообщение для Кринжика..."
-                  aria-label="Сообщение"
-                  maxLength={32768}
-                  rows={1}
+        <div className="chat-layout">
+          <aside className="chat-sidebar profile-card">
+            <button type="button" className="button button-primary chat-new" onClick={handleCreateChat} disabled={sending}>
+              + Новый чат
+            </button>
+            {chats.map((chat) => (
+              <div key={chat.id} className={`chat-item-wrapper${activeChat === chat.id ? ' active' : ''}`}>
+                <button
+                  type="button"
+                  className="chat-item"
+                  onClick={() => handleSelectChat(chat.id)}
+                >
+                  <span className="chat-item-name">{chat.chatName}</span>
+                </button>
+                <button
+                  type="button"
+                  className="chat-delete"
+                  onClick={() => void handleDeleteChat(chat.id)}
                   disabled={sending}
-                />
-                <button type="submit" className="chat-send" disabled={!draft.trim() || sending} aria-label="Отправить сообщение">
-                  ↑
+                  aria-label={`Удалить чат «${chat.chatName}»`}
+                  title="Удалить чат"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-.8 11.2a2 2 0 0 1-2 1.8H8.8a2 2 0 0 1-2-1.8L6 9Zm4 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" />
+                  </svg>
                 </button>
               </div>
-              <div className="chat-input-hint">Enter — отправить · Shift + Enter — новая строка</div>
-            </form>
-          </>
-        )}
-      </section>
+            ))}
+          </aside>
+
+          <section className="profile-card chat-panel">
+            <header className="chat-header">
+              <div className="chat-avatar">К</div>
+              <div>
+                <strong>Кринжик</strong>
+                <span>Персональный ИИ-помощник</span>
+              </div>
+            </header>
+
+            {activeChat === null ? (
+              <div className="empty-state">
+                <div className="empty-icon">💬</div>
+                <h3>Начните новый чат</h3>
+                <button type="button" className="button button-primary" onClick={handleCreateChat}>Создать чат</button>
+              </div>
+            ) : (
+              <>
+                <div ref={messagesRef} className="chat-messages" onScroll={handleMessagesScroll}>
+                  {messages.map((message) => (
+                    <div key={message.id} className={`chat-message ${message.isAiResponse ? 'assistant' : 'user'}`}>
+                      {message.isAiResponse && <div className="chat-message-avatar">К</div>}
+                      <div className="chat-message-body">
+                        {message.isAiResponse && <div className="chat-message-author">Кринжик</div>}
+                        <div className="chat-message-content">
+                          {message.isAiResponse ? (
+                            message.content ? <MarkdownContent content={message.content} /> : (sending ? '...' : '')
+                          ) : (
+                            message.content
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <form className="chat-input" onSubmit={(event) => { event.preventDefault(); void handleSend() }}>
+                  <textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="Напишите сообщение..."
+                    aria-label="Сообщение"
+                    maxLength={32768}
+                    rows={1}
+                    disabled={sending}
+                  />
+                  <button type="submit" className="chat-send" disabled={!draft.trim() || sending} aria-label="Отправить сообщение">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4.5 19.5 21 12 4.5 4.5 4 10l11 2-11 2 .5 5.5Z" />
+                    </svg>
+                  </button>
+                </form>
+              </>
+            )}
+          </section>
+        </div>
+      </div>
     </main>
   )
 }
