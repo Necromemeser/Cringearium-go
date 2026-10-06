@@ -19,6 +19,7 @@ var (
 const maxMessageLength = 32 * 1024
 const maxHistoryMessages = 40
 const dailyRequestLimit = 10
+const maxConversationTitleLength = 50
 
 type ChatService struct {
 	repository ports.Repository
@@ -136,9 +137,31 @@ func (s *ChatService) StreamResponse(ctx context.Context, conversationID, userID
 		Content:        fullResponse,
 		IsAIResponse:   true,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	if len(history) == 1 && !history[0].IsAIResponse {
+		s.generateConversationTitle(ctx, conversationID, userID, input, fullResponse)
+	}
+
+	return nil
 }
 
+
+func (s *ChatService) generateConversationTitle(ctx context.Context, conversationID, userID int64, userMessage, aiResponse string) {
+	messages := []ports.LLMMessage{
+		{Role: "system", Content: `Придумай короткое название для учебного чата. Название должно отражать тему разговора, а не повторять сообщение пользователя. Правила: 2–6 слов, максимум 50 символов, без кавычек, markdown и точки в конце. Используй язык разговора. Не используй шаблоны вроде «Чат о...», «Разговор о...» или «Помощь с...». Верни только название, без пояснений.`},
+		{Role: "user", Content: "Сообщение студента:\n" + userMessage + "\n\nОтвет Кринжика:\n" + aiResponse},
+	}
+	title, err := s.llm.Complete(ctx, messages)
+	if err != nil { return }
+	title = strings.TrimSpace(strings.Trim(title, `"`))
+	title = strings.TrimRight(title, ".!?;:")
+	if title == "" { return }
+	if len([]rune(title)) > maxConversationTitleLength { title = string([]rune(title)[:maxConversationTitleLength]) }
+	if err := s.repository.UpdateConversationName(ctx, conversationID, userID, title); err != nil { return }
+}
 func (s *ChatService) GetAdminStats(ctx context.Context) (domain.AdminStats, error) {
 	return s.repository.GetAdminStats(ctx)
 }
