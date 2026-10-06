@@ -59,6 +59,7 @@ func TestSendMessageStreamsSSE(t *testing.T) {
 	handler := NewHandler(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chats/7/messages", strings.NewReader(`{"content":"привет"}`))
+	req.SetPathValue("id", "7")
 	req.Header.Set("X-User-ID", "42")
 	req.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -88,6 +89,7 @@ func TestSendMessageRejectsForeignConversation(t *testing.T) {
 	handler := NewHandler(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chats/7/messages", strings.NewReader(`{"content":"привет"}`))
+	req.SetPathValue("id", "7")
 	req.Header.Set("X-User-ID", "99")
 	response := httptest.NewRecorder()
 
@@ -106,6 +108,7 @@ func TestSendMessageRequiresUserID(t *testing.T) {
 	handler := NewHandler(service)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chats/7/messages", strings.NewReader(`{"content":"привет"}`))
+	req.SetPathValue("id", "7")
 	response := httptest.NewRecorder()
 
 	handler.SendMessage(response, req)
