@@ -62,7 +62,7 @@ export default function Markdown({ content }: { content: string }) {
       return
     }
     if (!trimmed) { flushParagraph(); flushList(); return }
-    const image = /^!\\[([^\\]]*)\\]\\(([^)]+)\\)$/.exec(trimmed)
+    const image = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(trimmed)
     if (image) {
       flushParagraph()
       flushList()
