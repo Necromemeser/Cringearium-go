@@ -8,26 +8,13 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-//go:embed migrations/*.sql migrations/legacy/*.sql
+//go:embed migrations/*.sql
 var migrationFiles embed.FS
 
 func (db *DB) Migrate() error {
 	db.log.Debug("running migration")
 
-	// Existing databases have a schema_migrations table but no squashed-baseline
-	// marker. Keep their original migration history to avoid reinterpreting versions.
-	var useLegacy bool
-	err := db.conn.QueryRow(`SELECT
-		to_regclass('public.schema_migrations') IS NOT NULL
-		AND to_regclass('public.course_migration_profile') IS NULL`).Scan(&useLegacy)
-	if err != nil {
-		return err
-	}
-
 	migrationDir := "migrations"
-	if useLegacy {
-		migrationDir = "migrations/legacy"
-	}
 
 	files, err := iofs.New(migrationFiles, migrationDir)
 	if err != nil {
