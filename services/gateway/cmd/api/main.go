@@ -80,6 +80,7 @@ func main() {
 
 		mux.Handle("GET /api/admin/users", gateway.adminProxy(gateway.authURL, "/api/auth/users"))
 		mux.Handle("GET /api/admin/courses", gateway.adminProxy(gateway.coursesURL, "/internal/admin/courses"))
+	mux.Handle("GET /api/admin/assessment-results", gateway.adminProxy(gateway.coursesURL, "/internal/admin/assessment-results"))
 		mux.Handle("GET /api/admin/ai-tests", gateway.adminProxy(gateway.aiTestsURL, "/internal/admin/adaptive-tests"))
 
 	mux.Handle("GET /api/chats", gateway.aiChatProxy(true))
