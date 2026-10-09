@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
@@ -142,6 +143,43 @@ func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []do
 		result, err := tx.ExecContext(ctx, answerQuery, attemptID, answer.QuestionID, answer.AnswerID, testID)
 		if err != nil { return nil, err }
 		if rows, err := result.RowsAffected(); err != nil || rows != 1 { return nil, sql.ErrNoRows }
+	}
+
+	type storedAnswer struct {
+		QuestionID int64 `json:"question_id"`
+		AnswerID int64 `json:"answer_id"`
+		CorrectAnswerID int64 `json:"correct_answer_id"`
+		IsCorrect bool `json:"is_correct"`
+	}
+	storedAnswers := make([]storedAnswer, 0, len(answers))
+	for _, answer := range answers {
+		storedAnswers = append(storedAnswers, storedAnswer{
+			QuestionID: answer.QuestionID,
+			AnswerID: answer.AnswerID,
+			CorrectAnswerID: answer.CorrectAnswerID,
+			IsCorrect: answer.IsCorrect,
+		})
+	}
+	answersJSON, err := json.Marshal(storedAnswers)
+	if err != nil {
+		return nil, err
+	}
+	const assessmentQuery = `
+		INSERT INTO assessment_results (
+			test_attempt_id, user_id, course_id, page_id, assessment_type, score, answers, completed_at
+		)
+		SELECT $1, $2, s.course_id, p.id,
+			CASE WHEN p.title LIKE 'Входной тест:%' THEN 'pretest' ELSE 'posttest' END,
+			$3, $4::jsonb, $5
+		FROM tests t
+		JOIN course_pages p ON p.id = t.page_id
+		JOIN course_sections s ON s.id = p.section_id
+		WHERE t.id = $6
+			AND (p.title LIKE 'Входной тест:%' OR p.title LIKE 'Итоговый тест:%')
+		ON CONFLICT (test_attempt_id) DO NOTHING
+	`
+	if _, err := tx.ExecContext(ctx, assessmentQuery, attemptID, userID, score, string(answersJSON), completedAt, testID); err != nil {
+		return nil, err
 	}
 
 	if passed {
