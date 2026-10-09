@@ -2,6 +2,17 @@
 -- Keep the existing eight trigonometry questions and add eight questions for each
 -- of the other two course modules, resulting in a balanced 24-question assessment.
 
+-- Preserve the scope of historical attempts made with the original trig-only tests.
+ALTER TABLE assessment_results
+    ADD COLUMN assessment_scope TEXT NOT NULL DEFAULT 'course'
+    CHECK (assessment_scope IN ('trigonometry', 'course'));
+
+UPDATE assessment_results ar
+SET assessment_scope = 'trigonometry'
+FROM course_pages p
+WHERE ar.page_id = p.id
+  AND p.title IN ('Входной тест: тригонометрия', 'Итоговый тест: тригонометрия');
+
 -- Reserve position 0 for the entry assessment while preserving section order.
 -- The temporary offset avoids collisions if (course_id, position) is unique.
 UPDATE course_sections
