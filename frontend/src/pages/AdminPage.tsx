@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { User } from '../api/auth'
-import { getAdminAIStats, getAdminChatStats, getAdminCourses, getAdminUsers, type AdminAIStats, type AdminChatStats, type AdminCourse } from '../api/admin'
+import { getAdminAIStats, getAdminAssessmentResults, getAdminChatStats, getAdminCourses, getAdminUsers, type AdminAIStats, type AdminAssessmentResult, type AdminChatStats, type AdminCourse } from '../api/admin'
 import { TOKEN_KEY } from '../constants/auth'
 import './AdminPage.css'
 
@@ -11,6 +11,7 @@ type Props = {
 export default function AdminPage({ user }: Props) {
   const [users, setUsers] = useState<User[]>([])
   const [courses, setCourses] = useState<AdminCourse[]>([])
+  const [assessmentResults, setAssessmentResults] = useState<AdminAssessmentResult[]>([])
   const [aiStats, setAIStats] = useState<AdminAIStats | null>(null)
   const [chatStats, setChatStats] = useState<AdminChatStats | null>(null)
   const [chatStatsError, setChatStatsError] = useState('')
@@ -29,11 +30,13 @@ export default function AdminPage({ user }: Props) {
       getAdminUsers(token),
       getAdminCourses(token),
       getAdminAIStats(token),
+      getAdminAssessmentResults(token),
     ])
-      .then(([loadedUsers, loadedCourses, loadedAIStats]) => {
+      .then(([loadedUsers, loadedCourses, loadedAIStats, loadedAssessmentResults]) => {
         setUsers(loadedUsers)
         setCourses(loadedCourses)
         setAIStats(loadedAIStats)
+        setAssessmentResults(loadedAssessmentResults)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить данные панели'))
       .finally(() => setLoading(false))
@@ -71,6 +74,31 @@ export default function AdminPage({ user }: Props) {
 
   const publishedCourses = courses.filter((course) => course.status === 'published').length
   const totalEnrollments = courses.reduce((sum, course) => sum + course.enrolled_users, 0)
+
+  const assessmentPairs = new Map<string, {
+    userId: number
+    courseId: number
+    courseTitle: string
+    pretest?: AdminAssessmentResult
+    posttest?: AdminAssessmentResult
+  }>()
+  for (const result of assessmentResults) {
+    const key = `${result.user_id}-${result.course_id}`
+    const pair = assessmentPairs.get(key) ?? {
+      userId: result.user_id,
+      courseId: result.course_id,
+      courseTitle: result.course_title,
+    }
+    if (result.type === 'pretest' && !pair.pretest) pair.pretest = result
+    if (result.type === 'posttest' && !pair.posttest) pair.posttest = result
+    assessmentPairs.set(key, pair)
+  }
+  const comparableAssessments = Array.from(assessmentPairs.values())
+    .filter((pair) => pair.pretest && pair.posttest)
+    .sort((left, right) => left.userId - right.userId || left.courseId - right.courseId)
+
+  const formatAssessmentDate = (value: string) =>
+    new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
 
   return (
     <main className="page">
@@ -136,6 +164,68 @@ export default function AdminPage({ user }: Props) {
                     <td>{course.page_count}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="admin-card">
+          <div className="admin-card-heading">
+            <div>
+              <span className="eyebrow">ИССЛЕДОВАНИЕ ОБУЧЕНИЯ</span>
+              <h2>Входное и итоговое тестирование</h2>
+              <p className="admin-card-description">Результаты сохраняются отдельно от обычной практики. ID участника используется вместо персональных данных.</p>
+            </div>
+            <span className="admin-count">{assessmentResults.length}</span>
+          </div>
+
+          <div className="admin-subsection-heading">
+            <h3>Сравнение результатов участников</h3>
+            <span>Только пары, где есть оба теста</span>
+          </div>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Участник ID</th><th>Курс</th><th>Входной тест</th><th>Итоговый тест</th><th>Изменение</th></tr></thead>
+              <tbody>
+                {comparableAssessments.map((pair) => {
+                  const change = (pair.posttest?.score ?? 0) - (pair.pretest?.score ?? 0)
+                  return (
+                    <tr key={`${pair.userId}-${pair.courseId}`}>
+                      <td>{pair.userId}</td>
+                      <td><strong>{pair.courseTitle}</strong><small>Курс ID: {pair.courseId}</small></td>
+                      <td>{pair.pretest?.score}%<small>{pair.pretest ? formatAssessmentDate(pair.pretest.completed_at) : ''}</small></td>
+                      <td>{pair.posttest?.score}%<small>{pair.posttest ? formatAssessmentDate(pair.posttest.completed_at) : ''}</small></td>
+                      <td><strong className={change > 0 ? 'assessment-gain' : change < 0 ? 'assessment-loss' : ''}>{change > 0 ? '+' : ''}{change} п. п.</strong></td>
+                    </tr>
+                  )
+                })}
+                {comparableAssessments.length === 0 && (
+                  <tr><td colSpan={5}>Пока нет участников, прошедших оба теста в одном курсе.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="admin-subsection-heading">
+            <h3>Все попытки входного и итогового тестирования</h3>
+          </div>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Участник ID</th><th>Курс</th><th>Тип</th><th>Баллы</th><th>Время прохождения</th><th>Ответов сохранено</th></tr></thead>
+              <tbody>
+                {assessmentResults.map((result) => (
+                  <tr key={result.id}>
+                    <td>{result.user_id}</td>
+                    <td><strong>{result.course_title}</strong><small>Курс ID: {result.course_id}</small></td>
+                    <td><span className={`admin-badge admin-badge-assessment-${result.type}`}>{result.type === 'pretest' ? 'Входной' : 'Итоговый'}</span></td>
+                    <td><strong>{result.score}%</strong></td>
+                    <td>{formatAssessmentDate(result.completed_at)}</td>
+                    <td>{result.answers?.length ?? 0}</td>
+                  </tr>
+                ))}
+                {assessmentResults.length === 0 && (
+                  <tr><td colSpan={6}>Результатов пока нет. Они появятся после прохождения тестов.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
