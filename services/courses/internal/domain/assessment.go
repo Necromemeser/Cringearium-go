@@ -11,6 +11,7 @@ type AssessmentResult struct {
 	CourseID   int64           `json:"course_id"`
 	CourseTitle string         `json:"course_title"`
 	Type       string          `json:"type"`
+	Scope      string          `json:"scope"`
 	Score      int             `json:"score"`
 	Answers    json.RawMessage `json:"answers"`
 	CompletedAt time.Time      `json:"completed_at"`
