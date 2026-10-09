@@ -63,6 +63,15 @@ type pageResponse struct {
 	Position int             `json:"position"`
 }
 
+func (h *Handler) GetAdminAssessmentResults(w http.ResponseWriter, r *http.Request) {
+	results, err := h.courses.GetAssessmentResults(r.Context())
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
 func (h *Handler) GetAdminCourses(w http.ResponseWriter, r *http.Request) {
 	courses, err := h.courses.GetAdminCourses(r.Context())
 	if err != nil {
