@@ -54,6 +54,7 @@ func main() {
 	mux.HandleFunc("POST /api/tests/{testId}/attempts", handler.SubmitTest)
 	mux.HandleFunc("GET /internal/courses/{id}/ai-context", handler.GetAIContext)
 	mux.HandleFunc("GET /internal/admin/courses", handler.GetAdminCourses)
+	mux.HandleFunc("GET /internal/admin/assessment-results", handler.GetAdminAssessmentResults)
 
 	server := &http.Server{
 		Addr:              ":8082",
