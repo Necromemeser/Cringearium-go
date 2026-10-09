@@ -54,3 +54,5 @@ WHERE course_id IN (
     WHERE title IN ('Математика: курс с ИИ', 'Математика: обычные тесты')
   )
   AND title NOT IN ('Входное тестирование', 'Итоговое тестирование');
+
+ALTER TABLE assessment_results DROP COLUMN assessment_scope;
