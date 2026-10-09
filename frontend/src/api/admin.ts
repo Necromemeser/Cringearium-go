@@ -26,6 +26,7 @@ export type AdminAssessmentResult = {
   course_id: number
   course_title: string
   type: 'pretest' | 'posttest'
+  scope: 'trigonometry' | 'course'
   score: number
   answers: AssessmentAnswer[]
   completed_at: string
