@@ -3,7 +3,13 @@ import Link from '../common/Link'
 
 export default function CourseCard({ course }: { course: Course }) {
   return <article className="course-card">
-    <div className="course-cover"><span>{course.theme ? '∑' : '📚'}</span></div>
+    <div className="course-cover">
+      {course.image_id ? (
+        <img src={course.image_id} alt={`Обложка курса: ${course.title}`} loading="lazy" />
+      ) : (
+        <span>{course.theme ? '∑' : '📚'}</span>
+      )}
+    </div>
     <div className="course-body">
       <span className="course-theme">{course.theme || 'Курс'}</span>
       <h3>{course.title}</h3>
