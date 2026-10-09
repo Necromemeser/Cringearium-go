@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-label="МЕМОЛОГИЯ">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#101827"/><stop offset="1" stop-color="#8c2854"/></linearGradient></defs>
+<rect width="640" height="400" rx="28" fill="url(#bg)"/><circle cx="510" cy="95" r="90" fill="#ffffff" opacity=".07"/><circle cx="555" cy="300" r="135" fill="#ffffff" opacity=".05"/>
+<rect x="46" y="42" width="548" height="316" rx="22" fill="none" stroke="#ffffff" stroke-opacity=".22" stroke-width="2"/>
+<text x="80" y="150" font-size="76" font-family="Arial,sans-serif" fill="#ffffff">LOL</text>
+<text x="80" y="220" font-size="36" font-weight="700" font-family="Arial,sans-serif" fill="#ffffff">МЕМОЛОГИЯ</text>
+<text x="82" y="265" font-size="19" font-family="Arial,sans-serif" fill="#ffffff" opacity=".82">История · шаблоны · культура</text>
+<text x="82" y="322" font-size="14" letter-spacing="3" font-family="Arial,sans-serif" fill="#ffffff" opacity=".62">CRINGEARIUM · LEARN BY THINKING</text>
+</svg>
