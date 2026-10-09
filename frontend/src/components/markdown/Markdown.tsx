@@ -24,6 +24,8 @@ export default function Markdown({ content }: { content: string }) {
   let paragraph: string[] = []
   let list: string[] = []
   let orderedList = false
+  let codeBlock: string[] | null = null
+  let codeLanguage = ''
   const flushParagraph = () => {
     if (!paragraph.length) return
     blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>)
@@ -37,6 +39,28 @@ export default function Markdown({ content }: { content: string }) {
   }
   lines.forEach((line) => {
     const trimmed = line.trim()
+    if (codeBlock) {
+      if (trimmed.startsWith('```')) {
+        blocks.push(
+          <pre key={`code-${blocks.length}`}>
+            {codeLanguage && <div className="markdown-code-language">{codeLanguage}</div>}
+            <code>{codeBlock.join('\n')}</code>
+          </pre>,
+        )
+        codeBlock = null
+        codeLanguage = ''
+      } else {
+        codeBlock.push(line)
+      }
+      return
+    }
+    if (trimmed.startsWith('```')) {
+      flushParagraph()
+      flushList()
+      codeBlock = []
+      codeLanguage = trimmed.slice(3).trim()
+      return
+    }
     if (!trimmed) { flushParagraph(); flushList(); return }
     const image = /^!\\[([^\\]]*)\\]\\(([^)]+)\\)$/.exec(trimmed)
     if (image) {
@@ -73,6 +97,14 @@ export default function Markdown({ content }: { content: string }) {
     if (/^---+$/.test(trimmed)) { flushParagraph(); flushList(); blocks.push(<hr key={`hr-${blocks.length}`} />); return }
     paragraph.push(trimmed)
   })
+  if (codeBlock) {
+    blocks.push(
+      <pre key={`code-${blocks.length}`}>
+        {codeLanguage && <div className="markdown-code-language">{codeLanguage}</div>}
+        <code>{codeBlock.join('\n')}</code>
+      </pre>,
+    )
+  }
   flushParagraph(); flushList()
   return <div className="markdown-content">{blocks.length ? blocks : <p>Материал этой страницы пока не добавлен.</p>}</div>
 }
