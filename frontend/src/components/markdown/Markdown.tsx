@@ -38,6 +38,18 @@ export default function Markdown({ content }: { content: string }) {
   lines.forEach((line) => {
     const trimmed = line.trim()
     if (!trimmed) { flushParagraph(); flushList(); return }
+    const image = /^!\\[([^\\]]*)\\]\\(([^)]+)\\)$/.exec(trimmed)
+    if (image) {
+      flushParagraph()
+      flushList()
+      blocks.push(
+        <figure className="markdown-image" key={`img-${blocks.length}`}>
+          <img src={image[2]} alt={image[1]} loading="lazy" />
+          {image[1] && <figcaption>{image[1]}</figcaption>}
+        </figure>,
+      )
+      return
+    }
     const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed)
     if (heading) {
       flushParagraph(); flushList()
