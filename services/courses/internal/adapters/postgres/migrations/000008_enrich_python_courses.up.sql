@@ -17,9 +17,10 @@ FROM (VALUES
     ('Основы Python', 'Познакомьтесь с устройством простой программы: переменными, основными типами данных, вводом и выводом, преобразованием типов и арифметическими операциями. В конце раздела вы сможете написать программу, которая получает данные пользователя и выполняет вычисления.'),
     ('Условия и циклы', 'Научитесь описывать ветвления с помощью if, elif и else, сравнивать значения и повторять действия с помощью for и while. Разберём диапазоны range, вложенные условия, управление циклом и типичные ошибки, включая бесконечный цикл.'),
     ('Коллекции и функции', 'Освойте списки и словари, индексы, ключи, изменение коллекций и перебор элементов. Научитесь объявлять функции, передавать аргументы и возвращать результат, а затем объедините эти инструменты в небольшие программы.')
-) AS v(title, description)
-JOIN courses c ON c.id = s.course_id
-WHERE s.title = v.title
+) AS v(title, description),
+courses c
+WHERE s.course_id = c.id
+  AND s.title = v.title
   AND c.title IN ('Python: основы программирования', 'Python с ИИ: основы программирования');
 
 -- Add fuller explanations and guided exercises to the existing theory pages.
@@ -162,10 +163,12 @@ $more$),
 
 Напишите функцию celsius_to_fahrenheit(celsius), которая возвращает значение по формуле F = C × 9 / 5 + 32. Проверьте результат на 0, 20 и 100 градусах. Затем напишите функцию is_even(number), возвращающую логическое значение для проверки чётности.
 $more$)
-) AS v(title, extra_content)
-JOIN course_sections s ON s.title IN ('Основы Python', 'Условия и циклы', 'Коллекции и функции')
-JOIN courses c ON c.id = s.course_id
+) AS v(title, extra_content),
+course_sections s,
+courses c
 WHERE p.section_id = s.id
+  AND s.course_id = c.id
+  AND s.title IN ('Основы Python', 'Условия и циклы', 'Коллекции и функции')
   AND p.title = v.title
   AND p.type = 'theory'
   AND c.title IN ('Python: основы программирования', 'Python с ИИ: основы программирования');
