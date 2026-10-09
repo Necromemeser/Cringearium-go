@@ -112,7 +112,7 @@ WHERE p.section_id = s.id
 
 -- Temporarily move existing trig pages to avoid position collisions.
 UPDATE course_pages p
-SET position = position + 20
+SET position = p.position + 20
 FROM course_sections s
 JOIN courses c ON c.id = s.course_id
 WHERE p.section_id = s.id
