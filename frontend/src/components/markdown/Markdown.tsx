@@ -24,6 +24,8 @@ export default function Markdown({ content }: { content: string }) {
   let paragraph: string[] = []
   let list: string[] = []
   let orderedList = false
+  let codeBlock: string[] | null = null
+  let codeLanguage = ''
   const flushParagraph = () => {
     if (!paragraph.length) return
     blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>)
@@ -37,7 +39,41 @@ export default function Markdown({ content }: { content: string }) {
   }
   lines.forEach((line) => {
     const trimmed = line.trim()
+    if (codeBlock) {
+      if (trimmed.startsWith('```')) {
+        blocks.push(
+          <pre key={`code-${blocks.length}`}>
+            {codeLanguage && <div className="markdown-code-language">{codeLanguage}</div>}
+            <code>{codeBlock.join('\n')}</code>
+          </pre>,
+        )
+        codeBlock = null
+        codeLanguage = ''
+      } else {
+        codeBlock.push(line)
+      }
+      return
+    }
+    if (trimmed.startsWith('```')) {
+      flushParagraph()
+      flushList()
+      codeBlock = []
+      codeLanguage = trimmed.slice(3).trim()
+      return
+    }
     if (!trimmed) { flushParagraph(); flushList(); return }
+    const image = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(trimmed)
+    if (image) {
+      flushParagraph()
+      flushList()
+      blocks.push(
+        <figure className="markdown-image" key={`img-${blocks.length}`}>
+          <img src={image[2]} alt={image[1]} loading="lazy" />
+          {image[1] && <figcaption>{image[1]}</figcaption>}
+        </figure>,
+      )
+      return
+    }
     const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed)
     if (heading) {
       flushParagraph(); flushList()
