@@ -8,7 +8,7 @@ import (
 
 func (db *DB) FindAssessmentResults(ctx context.Context) ([]domain.AssessmentResult, error) {
 	const query = `
-		SELECT ar.id, ar.user_id, ar.course_id, c.title, ar.assessment_type,
+		SELECT ar.id, ar.user_id, ar.course_id, c.title, ar.assessment_type, ar.assessment_scope,
 			ar.score, ar.answers, ar.completed_at
 		FROM assessment_results ar
 		JOIN courses c ON c.id = ar.course_id
@@ -30,6 +30,7 @@ func (db *DB) FindAssessmentResults(ctx context.Context) ([]domain.AssessmentRes
 			&result.CourseID,
 			&result.CourseTitle,
 			&result.Type,
+			&result.Scope,
 			&result.Score,
 			&result.Answers,
 			&result.CompletedAt,
