@@ -13,6 +13,24 @@ export type AdminCourse = {
   page_count: number
 }
 
+export type AssessmentAnswer = {
+  question_id: number
+  answer_id: number
+  correct_answer_id: number
+  is_correct: boolean
+}
+
+export type AdminAssessmentResult = {
+  id: number
+  user_id: number
+  course_id: number
+  course_title: string
+  type: 'pretest' | 'posttest'
+  score: number
+  answers: AssessmentAnswer[]
+  completed_at: string
+}
+
 export type AdminAISession = {
   id: string
   user_id: number
@@ -74,4 +92,8 @@ export function getAdminAIStats(token: string): Promise<AdminAIStats> {
 
 export function getAdminChatStats(token: string): Promise<AdminChatStats> {
   return request<AdminChatStats>('/admin/ai-chat', token)
+}
+
+export function getAdminAssessmentResults(token: string): Promise<AdminAssessmentResult[]> {
+  return request<AdminAssessmentResult[]>('/admin/assessment-results', token)
 }
