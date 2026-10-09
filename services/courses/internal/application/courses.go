@@ -36,6 +36,14 @@ func (c *Courses) GetAdminCourses(ctx context.Context) ([]domain.AdminCourse, er
 	return c.repository.FindAdminCourses(ctx)
 }
 
+func (c *Courses) GetAssessmentResults(ctx context.Context) ([]domain.AssessmentResult, error) {
+	repository, ok := c.repository.(ports.AssessmentRepository)
+	if !ok {
+		return nil, errors.New("assessment repository is not configured")
+	}
+	return repository.FindAssessmentResults(ctx)
+}
+
 func (c *Courses) GetByID(ctx context.Context, id int64) (*domain.CourseDetails, error) {
 	course, err := c.repository.FindByID(ctx, id)
 	if err != nil {
