@@ -16,14 +16,14 @@ WHERE ar.page_id = p.id
 -- Reserve position 0 for the entry assessment while preserving section order.
 -- The temporary offset avoids collisions if (course_id, position) is unique.
 UPDATE course_sections
-SET position = position + 100000
+SET position = position + 1000
 WHERE course_id IN (
     SELECT id FROM courses
     WHERE title IN ('Математика: курс с ИИ', 'Математика: обычные тесты')
 );
 
 UPDATE course_sections
-SET position = position - 99999
+SET position = position - 999
 WHERE course_id IN (
     SELECT id FROM courses
     WHERE title IN ('Математика: курс с ИИ', 'Математика: обычные тесты')
