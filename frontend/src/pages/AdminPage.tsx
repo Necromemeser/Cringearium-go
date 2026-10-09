@@ -79,15 +79,17 @@ export default function AdminPage({ user }: Props) {
     userId: number
     courseId: number
     courseTitle: string
+    scope: 'trigonometry' | 'course'
     pretest?: AdminAssessmentResult
     posttest?: AdminAssessmentResult
   }>()
   for (const result of assessmentResults) {
-    const key = `${result.user_id}-${result.course_id}`
+    const key = `${result.user_id}-${result.course_id}-${result.scope}`
     const pair = assessmentPairs.get(key) ?? {
       userId: result.user_id,
       courseId: result.course_id,
       courseTitle: result.course_title,
+      scope: result.scope,
     }
     if (result.type === 'pretest' && !pair.pretest) pair.pretest = result
     if (result.type === 'posttest' && !pair.posttest) pair.posttest = result
@@ -95,7 +97,7 @@ export default function AdminPage({ user }: Props) {
   }
   const comparableAssessments = Array.from(assessmentPairs.values())
     .filter((pair) => pair.pretest && pair.posttest)
-    .sort((left, right) => left.userId - right.userId || left.courseId - right.courseId)
+    .sort((left, right) => left.userId - right.userId || left.courseId - right.courseId || left.scope.localeCompare(right.scope))
 
   const formatAssessmentDate = (value: string) =>
     new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
@@ -185,14 +187,15 @@ export default function AdminPage({ user }: Props) {
           </div>
           <div className="admin-table-wrap">
             <table className="admin-table">
-              <thead><tr><th>Участник ID</th><th>Курс</th><th>Входной тест</th><th>Итоговый тест</th><th>Изменение</th></tr></thead>
+              <thead><tr><th>Участник ID</th><th>Курс</th><th>Объём</th><th>Входной тест</th><th>Итоговый тест</th><th>Изменение</th></tr></thead>
               <tbody>
                 {comparableAssessments.map((pair) => {
                   const change = (pair.posttest?.score ?? 0) - (pair.pretest?.score ?? 0)
                   return (
-                    <tr key={`${pair.userId}-${pair.courseId}`}>
+                    <tr key={`${pair.userId}-${pair.courseId}-${pair.scope}`}>
                       <td>{pair.userId}</td>
                       <td><strong>{pair.courseTitle}</strong><small>Курс ID: {pair.courseId}</small></td>
+                      <td>{pair.scope === 'course' ? 'Весь курс' : 'Только тригонометрия'}</td>
                       <td>{pair.pretest?.score}%<small>{pair.pretest ? formatAssessmentDate(pair.pretest.completed_at) : ''}</small></td>
                       <td>{pair.posttest?.score}%<small>{pair.posttest ? formatAssessmentDate(pair.posttest.completed_at) : ''}</small></td>
                       <td><strong className={change > 0 ? 'assessment-gain' : change < 0 ? 'assessment-loss' : ''}>{change > 0 ? '+' : ''}{change} п. п.</strong></td>
@@ -200,7 +203,7 @@ export default function AdminPage({ user }: Props) {
                   )
                 })}
                 {comparableAssessments.length === 0 && (
-                  <tr><td colSpan={5}>Пока нет участников, прошедших оба теста в одном курсе.</td></tr>
+                  <tr><td colSpan={6}>Пока нет участников, прошедших оба теста в одном курсе и в одном объёме.</td></tr>
                 )}
               </tbody>
             </table>
@@ -211,12 +214,13 @@ export default function AdminPage({ user }: Props) {
           </div>
           <div className="admin-table-wrap">
             <table className="admin-table">
-              <thead><tr><th>Участник ID</th><th>Курс</th><th>Тип</th><th>Баллы</th><th>Время прохождения</th><th>Ответов сохранено</th></tr></thead>
+              <thead><tr><th>Участник ID</th><th>Курс</th><th>Объём</th><th>Тип</th><th>Баллы</th><th>Время прохождения</th><th>Ответов сохранено</th></tr></thead>
               <tbody>
                 {assessmentResults.map((result) => (
                   <tr key={result.id}>
                     <td>{result.user_id}</td>
                     <td><strong>{result.course_title}</strong><small>Курс ID: {result.course_id}</small></td>
+                    <td>{result.scope === 'course' ? 'Весь курс' : 'Только тригонометрия'}</td>
                     <td><span className={`admin-badge admin-badge-assessment-${result.type}`}>{result.type === 'pretest' ? 'Входной' : 'Итоговый'}</span></td>
                     <td><strong>{result.score}%</strong></td>
                     <td>{formatAssessmentDate(result.completed_at)}</td>
@@ -224,7 +228,7 @@ export default function AdminPage({ user }: Props) {
                   </tr>
                 ))}
                 {assessmentResults.length === 0 && (
-                  <tr><td colSpan={6}>Результатов пока нет. Они появятся после прохождения тестов.</td></tr>
+                  <tr><td colSpan={7}>Результатов пока нет. Они появятся после прохождения тестов.</td></tr>
                 )}
               </tbody>
             </table>
