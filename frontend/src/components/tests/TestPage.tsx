@@ -193,12 +193,17 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
           }`}
         >
           <strong>
-            {result.passed ? 'Тест пройден' : 'Тест не пройден'}
+            {test.passing_score === 0
+              ? 'Тест завершён'
+              : result.passed
+                ? 'Тест пройден'
+                : 'Тест не пройден'}
           </strong>
 
           <span>
-            {result.score}% · для прохождения нужно{' '}
-            {result.passing_score}%
+            {test.passing_score === 0
+              ? `${result.score}% правильных ответов`
+              : `${result.score}% · для прохождения нужно ${result.passing_score}%`}
           </span>
         </div>
       )}
