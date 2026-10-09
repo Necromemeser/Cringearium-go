@@ -97,14 +97,6 @@ export default function Markdown({ content }: { content: string }) {
     if (/^---+$/.test(trimmed)) { flushParagraph(); flushList(); blocks.push(<hr key={`hr-${blocks.length}`} />); return }
     paragraph.push(trimmed)
   })
-  if (codeBlock) {
-    blocks.push(
-      <pre key={`code-${blocks.length}`}>
-        {codeLanguage && <div className="markdown-code-language">{codeLanguage}</div>}
-        <code>{codeBlock.join('\n')}</code>
-      </pre>,
-    )
-  }
   flushParagraph(); flushList()
   return <div className="markdown-content">{blocks.length ? blocks : <p>Материал этой страницы пока не добавлен.</p>}</div>
 }
