@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/ports"
@@ -21,11 +22,12 @@ var (
 )
 
 type Courses struct {
-	repository ports.CourseRepository
+	repository  ports.CourseRepository
+	assessments ports.AssessmentRepository
 }
 
-func NewCourses(repository ports.CourseRepository) *Courses {
-	return &Courses{repository: repository}
+func NewCourses(repository ports.CourseRepository, assessments ports.AssessmentRepository) *Courses {
+	return &Courses{repository: repository, assessments: assessments}
 }
 
 func (c *Courses) GetAll(ctx context.Context) ([]*domain.Course, error) {
@@ -37,11 +39,7 @@ func (c *Courses) GetAdminCourses(ctx context.Context) ([]domain.AdminCourse, er
 }
 
 func (c *Courses) GetAssessmentResults(ctx context.Context) ([]domain.AssessmentResult, error) {
-	repository, ok := c.repository.(ports.AssessmentRepository)
-	if !ok {
-		return nil, errors.New("assessment repository is not configured")
-	}
-	return repository.FindAssessmentResults(ctx)
+	return c.assessments.FindAssessmentResults(ctx)
 }
 
 func (c *Courses) GetByID(ctx context.Context, id int64) (*domain.CourseDetails, error) {
@@ -302,7 +300,14 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 	score := correct * 100 / len(test.Questions)
 	passed := score >= test.PassingScore
 
-	result, err := c.repository.SubmitTest(ctx, userID, testID, answers, score, passed)
+	effects := domain.TestSubmissionEffects{CompletePage: passed}
+	switch {
+	case strings.HasPrefix(test.PageTitle, "Входной тест:"):
+		effects.AssessmentType = "pretest"
+	case strings.HasPrefix(test.PageTitle, "Итоговый тест:"):
+		effects.AssessmentType = "posttest"
+	}
+	result, err := c.repository.SubmitTest(ctx, userID, testID, answers, score, passed, effects)
 	if err != nil {
 		return nil, err
 	}
@@ -334,3 +339,5 @@ func enrichAttemptAnswers(test *domain.Test, answers []domain.TestAttemptAnswer)
 		answers[i].IsCorrect = answers[i].AnswerID == correctAnswerID
 	}
 }
+
+var _ ports.CoursesUseCases = (*Courses)(nil)

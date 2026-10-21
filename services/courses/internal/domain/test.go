@@ -5,6 +5,7 @@ import "time"
 type Test struct {
 	ID           int64
 	PageID       int64
+	PageTitle    string
 	PassingScore int
 	Questions    []TestQuestion
 }
@@ -26,10 +27,10 @@ type TestAnswer struct {
 }
 
 type TestAttemptAnswer struct {
-	QuestionID     int64
-	AnswerID       int64
+	QuestionID      int64
+	AnswerID        int64
 	CorrectAnswerID int64
-	IsCorrect      bool
+	IsCorrect       bool
 }
 
 type TestAttempt struct {
@@ -47,4 +48,10 @@ type TestResult struct {
 	PassingScore int
 	CompletedAt  time.Time
 	Answers      []TestAttemptAnswer
+}
+
+// TestSubmissionEffects are decisions made by the application, persisted together with an attempt.
+type TestSubmissionEffects struct {
+	AssessmentType string
+	CompletePage   bool
 }

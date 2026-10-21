@@ -17,7 +17,7 @@ import (
 func TestHandlerGetAll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	courses := []*domain.Course{{ID: 1, Title: "Math", Price: 99000, Status: domain.CourseStatusPublished}}
 	repo.EXPECT().FindAll(gomock.Any()).Return(courses, nil)
@@ -37,7 +37,7 @@ func TestHandlerGetAll(t *testing.T) {
 func TestHandlerGetAllRepositoryError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	repo.EXPECT().FindAll(gomock.Any()).Return(nil, errors.New("database error"))
 
@@ -53,7 +53,7 @@ func TestHandlerGetAllRepositoryError(t *testing.T) {
 func TestHandlerGetByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	course := &domain.CourseDetails{
 		Course: domain.Course{ID: 1, Title: "Math", Status: domain.CourseStatusPublished},
@@ -88,7 +88,7 @@ func TestHandlerGetByID(t *testing.T) {
 func TestHandlerGetByIDInvalidID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/courses/nope", nil)
 	req.SetPathValue("id", "nope")
@@ -103,7 +103,7 @@ func TestHandlerGetByIDInvalidID(t *testing.T) {
 func TestHandlerGetByIDNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(nil, nil)
 
@@ -120,7 +120,7 @@ func TestHandlerGetByIDNotFound(t *testing.T) {
 func TestHandlerEnroll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(&domain.CourseDetails{Course: domain.Course{ID: 1, Status: domain.CourseStatusPublished}}, nil)
 	repo.EXPECT().HasAccess(gomock.Any(), int64(42), int64(1)).Return(false, nil)
@@ -140,7 +140,7 @@ func TestHandlerEnroll(t *testing.T) {
 func TestHandlerEnrollUnauthorized(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/courses/1/enroll", nil)
 	req.SetPathValue("id", "1")
@@ -185,7 +185,7 @@ func TestHandlerEnrollErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repo := mocks.NewMockCourseRepository(ctrl)
-			handler := NewHandler(application.NewCourses(repo))
+			handler := NewHandler(application.NewCourses(repo, nil))
 
 			repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(tt.course, nil)
 			if tt.course != nil && tt.course.Course.Status == domain.CourseStatusPublished && tt.course.Course.Price == 0 {
@@ -208,7 +208,7 @@ func TestHandlerEnrollErrors(t *testing.T) {
 func TestHandlerGetAccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(&domain.CourseDetails{Course: domain.Course{ID: 1}}, nil)
 	repo.EXPECT().HasAccess(gomock.Any(), int64(42), int64(1)).Return(true, nil)
@@ -235,7 +235,7 @@ func TestHandlerGetAccess(t *testing.T) {
 func TestHandlerGetAccessUnauthorized(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	handler := NewHandler(application.NewCourses(repo))
+	handler := NewHandler(application.NewCourses(repo, nil))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/courses/1/access", nil)
 	req.SetPathValue("id", "1")

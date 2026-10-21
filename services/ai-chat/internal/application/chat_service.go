@@ -165,3 +165,5 @@ func (s *ChatService) generateConversationTitle(ctx context.Context, conversatio
 func (s *ChatService) GetAdminStats(ctx context.Context) (domain.AdminStats, error) {
 	return s.repository.GetAdminStats(ctx)
 }
+
+var _ ports.ChatServiceUseCases = (*ChatService)(nil)

@@ -13,8 +13,6 @@ import (
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
 )
 
-var ErrNotFound = sql.ErrNoRows
-
 type Repository struct {
 	db *sqlx.DB
 }
@@ -57,6 +55,9 @@ func (r *Repository) GetSession(ctx context.Context, sessionID string, userID in
 		FROM adaptive_sessions
 		WHERE id = $1 AND user_id = $2
 	`, sessionID, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.AdaptiveSession{}, ports.ErrNotFound
+	}
 	if err != nil {
 		return domain.AdaptiveSession{}, err
 	}

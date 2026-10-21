@@ -2,9 +2,13 @@ package ports
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
 )
+
+// ErrNotFound means the requested session does not exist or is not owned by the user.
+var ErrNotFound = errors.New("session not found")
 
 type SessionRepository interface {
 	CreateSession(

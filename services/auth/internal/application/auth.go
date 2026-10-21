@@ -189,3 +189,5 @@ func (a *Auth) Login(
 
 	return token, nil
 }
+
+var _ ports.AuthUseCases = (*Auth)(nil)

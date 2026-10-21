@@ -11,7 +11,7 @@ import (
 
 func (db *DB) FindTestByPageID(ctx context.Context, userID, pageID int64) (*domain.Test, error) {
 	const query = `
-		SELECT t.id, t.page_id, t.passing_score
+		SELECT t.id, t.page_id, t.passing_score, p.title
 		FROM tests t
 		JOIN course_pages p ON p.id = t.page_id
 		JOIN course_sections s ON s.id = p.section_id
@@ -24,7 +24,7 @@ func (db *DB) FindTestByPageID(ctx context.Context, userID, pageID int64) (*doma
 
 func (db *DB) FindTestByID(ctx context.Context, userID, testID int64) (*domain.Test, error) {
 	const query = `
-		SELECT t.id, t.page_id, t.passing_score
+		SELECT t.id, t.page_id, t.passing_score, p.title
 		FROM tests t
 		JOIN course_pages p ON p.id = t.page_id
 		JOIN course_sections s ON s.id = p.section_id
@@ -45,7 +45,9 @@ func (db *DB) FindLatestTestAttempt(ctx context.Context, userID, testID int64) (
 	`
 	attempt := new(domain.TestAttempt)
 	if err := db.conn.QueryRowxContext(ctx, attemptQuery, userID, testID).Scan(&attempt.ID, &attempt.Score, &attempt.Passed, &attempt.CompletedAt); err != nil {
-		if err == sql.ErrNoRows { return nil, nil }
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -56,21 +58,29 @@ func (db *DB) FindLatestTestAttempt(ctx context.Context, userID, testID int64) (
 		ORDER BY question_id
 	`
 	rows, err := db.conn.QueryxContext(ctx, answersQuery, attempt.ID)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	for rows.Next() {
 		answer := domain.TestAttemptAnswer{}
-		if err := rows.Scan(&answer.QuestionID, &answer.AnswerID); err != nil { return nil, err }
+		if err := rows.Scan(&answer.QuestionID, &answer.AnswerID); err != nil {
+			return nil, err
+		}
 		attempt.Answers = append(attempt.Answers, answer)
 	}
-	if err := rows.Err(); err != nil { return nil, err }
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return attempt, nil
 }
 
 func (db *DB) findTest(ctx context.Context, query string, args ...any) (*domain.Test, error) {
 	test := new(domain.Test)
-	if err := db.conn.QueryRowxContext(ctx, query, args...).Scan(&test.ID, &test.PageID, &test.PassingScore); err != nil {
-		if err == sql.ErrNoRows { return nil, nil }
+	if err := db.conn.QueryRowxContext(ctx, query, args...).Scan(&test.ID, &test.PageID, &test.PassingScore, &test.PageTitle); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -81,15 +91,21 @@ func (db *DB) findTest(ctx context.Context, query string, args ...any) (*domain.
 		ORDER BY position
 	`
 	rows, err := db.conn.QueryxContext(ctx, questionsQuery, test.ID)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
 	for rows.Next() {
 		question := domain.TestQuestion{}
-		if err := rows.Scan(&question.ID, &question.TestID, &question.Question, &question.Position); err != nil { return nil, err }
+		if err := rows.Scan(&question.ID, &question.TestID, &question.Question, &question.Position); err != nil {
+			return nil, err
+		}
 		test.Questions = append(test.Questions, question)
 	}
-	if err := rows.Err(); err != nil { return nil, err }
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	const answersQuery = `
 		SELECT id, question_id, text, position, is_correct
@@ -99,7 +115,9 @@ func (db *DB) findTest(ctx context.Context, query string, args ...any) (*domain.
 	`
 	for i := range test.Questions {
 		answerRows, err := db.conn.QueryxContext(ctx, answersQuery, test.Questions[i].ID)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		for answerRows.Next() {
 			answer := domain.TestAnswer{}
 			if err := answerRows.Scan(&answer.ID, &answer.QuestionID, &answer.Text, &answer.Position, &answer.IsCorrect); err != nil {
@@ -118,9 +136,11 @@ func (db *DB) findTest(ctx context.Context, query string, args ...any) (*domain.
 	return test, nil
 }
 
-func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer, score int, passed bool) (*domain.TestResult, error) {
+func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer, score int, passed bool, effects domain.TestSubmissionEffects) (*domain.TestResult, error) {
 	tx, err := db.conn.BeginTxx(ctx, nil)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer tx.Rollback()
 
 	const attemptQuery = `
@@ -130,34 +150,39 @@ func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []do
 	`
 	var attemptID int64
 	var completedAt time.Time
-	if err := tx.QueryRowContext(ctx, attemptQuery, testID, userID, score, passed).Scan(&attemptID, &completedAt); err != nil { return nil, err }
+	if err := tx.QueryRowContext(ctx, attemptQuery, testID, userID, score, passed).Scan(&attemptID, &completedAt); err != nil {
+		return nil, err
+	}
 
 	const answerQuery = `
 		INSERT INTO test_attempt_answers (attempt_id, question_id, answer_id, is_correct)
-		SELECT $1, tq.id, $3, ($3 = ta.id)
+		SELECT $1, tq.id, $3, $5
 		FROM test_questions tq
-		LEFT JOIN test_answers ta ON ta.id = $3 AND ta.question_id = tq.id
 		WHERE tq.id = $2 AND tq.test_id = $4
 	`
 	for _, answer := range answers {
-		result, err := tx.ExecContext(ctx, answerQuery, attemptID, answer.QuestionID, answer.AnswerID, testID)
-		if err != nil { return nil, err }
-		if rows, err := result.RowsAffected(); err != nil || rows != 1 { return nil, sql.ErrNoRows }
+		result, err := tx.ExecContext(ctx, answerQuery, attemptID, answer.QuestionID, answer.AnswerID, testID, answer.IsCorrect)
+		if err != nil {
+			return nil, err
+		}
+		if rows, err := result.RowsAffected(); err != nil || rows != 1 {
+			return nil, sql.ErrNoRows
+		}
 	}
 
 	type storedAnswer struct {
-		QuestionID int64 `json:"question_id"`
-		AnswerID int64 `json:"answer_id"`
+		QuestionID      int64 `json:"question_id"`
+		AnswerID        int64 `json:"answer_id"`
 		CorrectAnswerID int64 `json:"correct_answer_id"`
-		IsCorrect bool `json:"is_correct"`
+		IsCorrect       bool  `json:"is_correct"`
 	}
 	storedAnswers := make([]storedAnswer, 0, len(answers))
 	for _, answer := range answers {
 		storedAnswers = append(storedAnswers, storedAnswer{
-			QuestionID: answer.QuestionID,
-			AnswerID: answer.AnswerID,
+			QuestionID:      answer.QuestionID,
+			AnswerID:        answer.AnswerID,
 			CorrectAnswerID: answer.CorrectAnswerID,
-			IsCorrect: answer.IsCorrect,
+			IsCorrect:       answer.IsCorrect,
 		})
 	}
 	answersJSON, err := json.Marshal(storedAnswers)
@@ -168,29 +193,33 @@ func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []do
 		INSERT INTO assessment_results (
 			test_attempt_id, user_id, course_id, page_id, assessment_type, score, answers, completed_at
 		)
-		SELECT $1, $2, s.course_id, p.id,
-			CASE WHEN p.title LIKE 'Входной тест:%' THEN 'pretest' ELSE 'posttest' END,
+		SELECT $1, $2, s.course_id, p.id, $7,
 			$3, $4::jsonb, $5
 		FROM tests t
 		JOIN course_pages p ON p.id = t.page_id
 		JOIN course_sections s ON s.id = p.section_id
 		WHERE t.id = $6
-			AND (p.title LIKE 'Входной тест:%' OR p.title LIKE 'Итоговый тест:%')
 		ON CONFLICT (test_attempt_id) DO NOTHING
 	`
-	if _, err := tx.ExecContext(ctx, assessmentQuery, attemptID, userID, score, string(answersJSON), completedAt, testID); err != nil {
-		return nil, err
+	if effects.AssessmentType != "" {
+		if _, err := tx.ExecContext(ctx, assessmentQuery, attemptID, userID, score, string(answersJSON), completedAt, testID, effects.AssessmentType); err != nil {
+			return nil, err
+		}
 	}
 
-	if passed {
+	if effects.CompletePage {
 		const completeQuery = `
 			INSERT INTO page_progress (user_id, page_id)
 			SELECT $1, page_id FROM tests WHERE id = $2
 			ON CONFLICT (user_id, page_id) DO NOTHING
 		`
-		if _, err := tx.ExecContext(ctx, completeQuery, userID, testID); err != nil { return nil, err }
+		if _, err := tx.ExecContext(ctx, completeQuery, userID, testID); err != nil {
+			return nil, err
+		}
 	}
 
-	if err := tx.Commit(); err != nil { return nil, err }
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return &domain.TestResult{AttemptID: attemptID, Score: score, Passed: passed, CompletedAt: completedAt, Answers: answers}, nil
 }

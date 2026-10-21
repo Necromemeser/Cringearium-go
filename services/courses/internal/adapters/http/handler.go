@@ -8,11 +8,12 @@ import (
 
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/application"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
+	"github.com/Necromemeser/Cringearium-go/services/courses/internal/ports"
 )
 
-type Handler struct{ courses *application.Courses }
+type Handler struct{ courses ports.CoursesUseCases }
 
-func NewHandler(courses *application.Courses) *Handler { return &Handler{courses: courses} }
+func NewHandler(courses ports.CoursesUseCases) *Handler { return &Handler{courses: courses} }
 
 type courseResponse struct {
 	ID          int64               `json:"id"`

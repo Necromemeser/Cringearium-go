@@ -120,6 +120,9 @@ jobs:
           docker compose logs frontend
           exit 1
 
+      - name: Backend business workflow smoke test
+        run: python3 .github/scripts/smoke_backend.py
+
       - name: Show logs on failure
         if: failure()
         run: docker compose logs

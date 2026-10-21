@@ -38,7 +38,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	courseService := application.NewCourses(db)
+	courseService := application.NewCourses(db, db)
 	handler := courseshttp.NewHandler(courseService)
 
 	mux := http.NewServeMux()

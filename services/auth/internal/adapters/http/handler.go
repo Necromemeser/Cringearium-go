@@ -8,13 +8,14 @@ import (
 
 	"github.com/Necromemeser/Cringearium-go/services/auth/internal/application"
 	"github.com/Necromemeser/Cringearium-go/services/auth/internal/domain"
+	"github.com/Necromemeser/Cringearium-go/services/auth/internal/ports"
 )
 
 type Handler struct {
-	auth *application.Auth
+	auth ports.AuthUseCases
 }
 
-func NewHandler(auth *application.Auth) *Handler {
+func NewHandler(auth ports.AuthUseCases) *Handler {
 	return &Handler{
 		auth: auth,
 	}

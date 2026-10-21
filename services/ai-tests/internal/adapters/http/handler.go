@@ -9,15 +9,16 @@ import (
 	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/application"
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
 )
 
 type Handler struct {
 	logger  *slog.Logger
-	service *application.AdaptiveTestService
+	service ports.AdaptiveTestServiceUseCases
 }
 
-func NewHandler(logger *slog.Logger, service *application.AdaptiveTestService) *Handler {
+func NewHandler(logger *slog.Logger, service ports.AdaptiveTestServiceUseCases) *Handler {
 	return &Handler{logger: logger, service: service}
 }
 

@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"crypto/rand"
@@ -126,7 +125,7 @@ func (s *AdaptiveTestService) GetSession(ctx context.Context, userID int64, sess
 	}
 	session, err := s.repository.GetSession(ctx, sessionID, userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, ports.ErrNotFound) {
 			return domain.AdaptiveSession{}, ErrRoundNotFound
 		}
 		return domain.AdaptiveSession{}, err
@@ -632,3 +631,5 @@ func newSessionID() string {
 		hex.EncodeToString(buf[10:16]),
 	)
 }
+
+var _ ports.AdaptiveTestServiceUseCases = (*AdaptiveTestService)(nil)

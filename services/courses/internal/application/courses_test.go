@@ -13,7 +13,7 @@ import (
 func TestCoursesGetAll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	courses := []*domain.Course{{ID: 1, Title: "Course 1"}}
 	repo.EXPECT().FindAll(gomock.Any()).Return(courses, nil)
@@ -30,7 +30,7 @@ func TestCoursesGetAll(t *testing.T) {
 func TestCoursesGetAllRepositoryError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	wantErr := errors.New("repository error")
 	repo.EXPECT().FindAll(gomock.Any()).Return(nil, wantErr)
@@ -44,7 +44,7 @@ func TestCoursesGetAllRepositoryError(t *testing.T) {
 func TestCoursesGetByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	course := &domain.CourseDetails{Course: domain.Course{ID: 1, Title: "Course 1"}}
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(course, nil)
@@ -61,7 +61,7 @@ func TestCoursesGetByID(t *testing.T) {
 func TestCoursesGetByIDNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(nil, nil)
 
@@ -74,7 +74,7 @@ func TestCoursesGetByIDNotFound(t *testing.T) {
 func TestCoursesGetByIDRepositoryError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	wantErr := errors.New("repository error")
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(nil, wantErr)
@@ -158,7 +158,7 @@ func TestCoursesEnroll(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repo := mocks.NewMockCourseRepository(ctrl)
-			service := NewCourses(repo)
+			service := NewCourses(repo, nil)
 			tt.setup(repo)
 
 			err := service.Enroll(context.Background(), 42, 1)
@@ -178,7 +178,7 @@ func TestCoursesEnroll(t *testing.T) {
 func TestCoursesEnrollFindByIDError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	wantErr := errors.New("repository error")
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(nil, wantErr)
@@ -192,7 +192,7 @@ func TestCoursesEnrollFindByIDError(t *testing.T) {
 func TestCoursesHasAccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(&domain.CourseDetails{Course: domain.Course{ID: 1}}, nil)
 	repo.EXPECT().HasAccess(gomock.Any(), int64(42), int64(1)).Return(true, nil)
@@ -209,7 +209,7 @@ func TestCoursesHasAccess(t *testing.T) {
 func TestCoursesHasAccessCourseNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(nil, nil)
 
@@ -225,7 +225,7 @@ func TestCoursesHasAccessCourseNotFound(t *testing.T) {
 func TestCoursesHasAccessRepositoryError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mocks.NewMockCourseRepository(ctrl)
-	service := NewCourses(repo)
+	service := NewCourses(repo, nil)
 
 	wantErr := errors.New("repository error")
 	repo.EXPECT().FindByID(gomock.Any(), int64(1)).Return(&domain.CourseDetails{Course: domain.Course{ID: 1}}, nil)

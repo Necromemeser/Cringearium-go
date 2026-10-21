@@ -34,7 +34,7 @@ func (r *sessionRepositoryMock) GetAdminStats(_ context.Context) (domain.AdminAI
 func (r *sessionRepositoryMock) GetSession(_ context.Context, sessionID string, userID int64) (domain.AdaptiveSession, error) {
 	session, ok := r.sessions[sessionID]
 	if !ok || session.UserID != userID {
-		return domain.AdaptiveSession{}, errors.New("not found")
+		return domain.AdaptiveSession{}, ports.ErrNotFound
 	}
 	return cloneSession(session), nil
 }
@@ -169,9 +169,9 @@ func testCourseContext() ports.CourseContext {
 		},
 		OrdinaryTests: []ports.OrdinaryTest{
 			{
-				ID:    100,
+				ID:     100,
 				PageID: 10,
-				Title: "Variables test",
+				Title:  "Variables test",
 				Questions: []ports.OrdinaryTestQuestion{
 					{Question: "What stores a value?", Options: []string{"variable", "loop"}},
 				},
@@ -545,7 +545,7 @@ func TestSubmitAnswersFailsSessionWhenSecondRoundGenerationFails(t *testing.T) {
 	courses := &courseClientMock{context: testCourseContext()}
 	expected := errors.New("llm unavailable")
 	llm := &llmClientMock{
-		rounds:   []ports.GeneratedRound{generatedRound(3, 10)},
+		rounds:    []ports.GeneratedRound{generatedRound(3, 10)},
 		roundErrs: []error{nil, expected},
 	}
 	service := NewAdaptiveTestService(repository, courses, llm)
@@ -641,7 +641,20 @@ func TestBuildRoundRequestIncludesCourseContext(t *testing.T) {
 	}
 }
 
-
 func int64Ptr(v int64) *int64 {
 	return &v
+}
+
+func TestGetSessionNotFoundUsesPortError(t *testing.T) {
+	repo := newSessionRepositoryMock()
+	repo.sessions["owned"] = domain.AdaptiveSession{ID: "owned", UserID: 42}
+	service := NewAdaptiveTestService(repo, nil, nil)
+	for _, id := range []string{"missing", "owned"} {
+		if _, err := service.GetSession(context.Background(), 99, id); !errors.Is(err, ErrRoundNotFound) {
+			t.Fatalf("session %q error=%v", id, err)
+		}
+	}
+	if session, err := service.GetSession(context.Background(), 42, "owned"); err != nil || session.ID != "owned" {
+		t.Fatalf("session=%+v error=%v", session, err)
+	}
 }

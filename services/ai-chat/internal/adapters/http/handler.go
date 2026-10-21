@@ -10,14 +10,15 @@ import (
 	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/application"
+	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/ports"
 	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/domain"
 )
 
 type Handler struct {
-	service *application.ChatService
+	service ports.ChatServiceUseCases
 }
 
-func NewHandler(service *application.ChatService) *Handler {
+func NewHandler(service ports.ChatServiceUseCases) *Handler {
 	return &Handler{service: service}
 }
 
