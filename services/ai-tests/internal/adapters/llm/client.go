@@ -23,12 +23,14 @@ const (
 )
 
 const roundSystemPrompt = "You generate adaptive educational tests.\n" +
+	"Write all learner-facing text in Russian: titles, instructions, questions, options (except code), explanations.\n" +
 	"Your response is consumed by a Go backend.\n" +
 	"Follow the requested JSON contract exactly.\n" +
 	"Return JSON only. Do not add Markdown, comments, explanations outside JSON, or extra fields.\n" +
 	"All numeric fields must be JSON numbers, never strings."
 
 const feedbackSystemPrompt = "You generate concise educational feedback.\n" +
+	"Write ALL learner-facing text in Russian, including summary, titles, reasons and descriptions. Never switch to English.\n" +
 	"Your response is consumed by a Go backend.\n" +
 	"Follow the requested JSON contract exactly.\n" +
 	"Return JSON only. Do not add Markdown, comments, explanations outside JSON, or extra fields.\n" +
@@ -534,6 +536,7 @@ const feedbackOutputContract = "OUTPUT CONTRACT\n\n" +
 	"masteredTopics and topicsToReview items contain exactly title, topicPageID, reason.\n" +
 	"nextSteps items contain exactly title, description, topicPageID.\n\n" +
 	"Rules:\n" +
+	"0. All summary, title, reason and description strings must be written in Russian.\n" +
 	"1. Use only topicPageID values from ALLOWED TOPICS, or null.\n" +
 	"2. Do not invent topics.\n" +
 	"3. Base feedback only on ROUND RESULTS.\n" +

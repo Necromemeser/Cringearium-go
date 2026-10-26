@@ -45,14 +45,17 @@ type sessionResponse struct {
 }
 
 type roundResponse struct {
-	LearningPlan []domain.QuestionTarget `json:"learning_plan,omitempty"`
-	ID           int64                   `json:"id"`
-	RoundNumber  int                     `json:"round_number"`
-	Strategy     domain.RoundStrategy    `json:"strategy"`
-	Status       domain.RoundStatus      `json:"status"`
-	Title        string                  `json:"title"`
-	Instructions string                  `json:"instructions,omitempty"`
-	Questions    []questionResponse      `json:"questions"`
+	Purpose       string                  `json:"purpose"`
+	CorrectCount  int                     `json:"correct_count"`
+	AnsweredCount int                     `json:"answered_count"`
+	LearningPlan  []domain.QuestionTarget `json:"learning_plan,omitempty"`
+	ID            int64                   `json:"id"`
+	RoundNumber   int                     `json:"round_number"`
+	Strategy      domain.RoundStrategy    `json:"strategy"`
+	Status        domain.RoundStatus      `json:"status"`
+	Title         string                  `json:"title"`
+	Instructions  string                  `json:"instructions,omitempty"`
+	Questions     []questionResponse      `json:"questions"`
 }
 
 type questionResponse struct {
@@ -313,7 +316,9 @@ func toSessionResponse(session domain.AdaptiveSession) sessionResponse {
 	}
 
 	for _, round := range session.Rounds {
+		correct, answered := domain.RoundScore(round)
 		rr := roundResponse{
+			Purpose: domain.RoundPurpose(round), CorrectCount: correct, AnsweredCount: answered,
 			LearningPlan: round.LearningPlan,
 			ID:           round.ID,
 			RoundNumber:  round.RoundNumber,
@@ -353,12 +358,13 @@ func toSessionResponse(session domain.AdaptiveSession) sessionResponse {
 		response.Rounds = append(response.Rounds, rr)
 	}
 
-	if session.Feedback != nil {
+	if session.Feedback != nil || session.Status == domain.SessionCompleted {
+		feedback := domain.LocalizedFeedback(session)
 		response.Feedback = &feedbackResponse{
-			Summary:        session.Feedback.Summary,
-			MasteredTopics: session.Feedback.MasteredTopics,
-			TopicsToReview: session.Feedback.TopicsToReview,
-			NextSteps:      session.Feedback.NextSteps,
+			Summary:        feedback.Summary,
+			MasteredTopics: feedback.MasteredTopics,
+			TopicsToReview: feedback.TopicsToReview,
+			NextSteps:      feedback.NextSteps,
 		}
 	}
 

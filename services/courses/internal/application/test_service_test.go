@@ -295,8 +295,14 @@ func TestSubmitTestAssessmentAndProgressDecisions(t *testing.T) {
 			}
 			repo.EXPECT().FindTestByID(gomock.Any(), int64(42), int64(1)).Return(test, nil)
 			repo.EXPECT().FindLatestTestAttempt(gomock.Any(), int64(42), int64(1)).Return(nil, nil)
-			repo.EXPECT().SubmitTest(gomock.Any(), int64(42), int64(1), gomock.Any(), score, tc.passed, domain.TestSubmissionEffects{AssessmentType: tc.assessment, CompletePage: tc.passed}).DoAndReturn(
-				func(_ context.Context, _, _ int64, graded []domain.TestAttemptAnswer, score int, passed bool, _ domain.TestSubmissionEffects) (*domain.TestResult, error) {
+			repo.EXPECT().SubmitTest(gomock.Any(), int64(42), int64(1), gomock.Any(), score, tc.passed, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _ int64, graded []domain.TestAttemptAnswer, score int, passed bool, effects domain.TestSubmissionEffects) (*domain.TestResult, error) {
+					if effects.AssessmentType != tc.assessment || effects.CompletePage != tc.passed {
+						t.Fatalf("wrong effects: %+v", effects)
+					}
+					if tc.assessment != "" && (len(effects.FormHash) != 64 || len(effects.InstrumentSnapshot) == 0 || effects.AssessmentScope != "course") {
+						t.Fatalf("missing instrument snapshot: %+v", effects)
+					}
 					if !graded[0].IsCorrect || graded[1].IsCorrect != tc.passed || graded[2].IsCorrect != tc.passed {
 						t.Fatalf("incorrect grading: %+v", graded)
 					}

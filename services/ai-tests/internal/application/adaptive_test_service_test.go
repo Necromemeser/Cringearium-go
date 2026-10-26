@@ -353,15 +353,15 @@ func TestSubmitAnswersCompletesSessionAndGeneratesFeedback(t *testing.T) {
 			generatedRound(3, 11),
 		},
 		feedback: ports.GeneratedFeedback{
-			Summary: "Good work",
+			Summary: "Хорошая работа",
 			MasteredTopics: []ports.GeneratedTopicFeedback{
-				{Title: "Variables", TopicPageID: int64Ptr(10), Reason: "Strong result"},
+				{Title: "Переменные", TopicPageID: int64Ptr(10), Reason: "Хороший результат"},
 			},
 			TopicsToReview: []ports.GeneratedTopicFeedback{
-				{Title: "Loops", TopicPageID: int64Ptr(11), Reason: "Review needed"},
+				{Title: "Циклы", TopicPageID: int64Ptr(11), Reason: "Стоит повторить"},
 			},
 			NextSteps: []ports.GeneratedNextStep{
-				{Title: "Practice", Description: "Solve more tasks", TopicPageID: int64Ptr(11)},
+				{Title: "Практика", Description: "Реши ещё несколько задач", TopicPageID: int64Ptr(11)},
 			},
 		},
 	}
@@ -395,7 +395,7 @@ func TestSubmitAnswersCompletesSessionAndGeneratesFeedback(t *testing.T) {
 	if completed.Status != domain.SessionCompleted {
 		t.Fatalf("status = %q, want %q", completed.Status, domain.SessionCompleted)
 	}
-	if completed.Feedback == nil || completed.Feedback.Summary != "Good work" {
+	if completed.Feedback == nil || completed.Feedback.Summary != "Хорошая работа" {
 		t.Fatalf("feedback = %#v, want generated feedback", completed.Feedback)
 	}
 	if len(llm.feedbackCalls) != 1 {
@@ -579,7 +579,7 @@ func TestSubmitAnswersFailsSessionWhenSecondRoundGenerationFails(t *testing.T) {
 	}
 }
 
-func TestSubmitAnswersFailsSessionWhenFeedbackGenerationFails(t *testing.T) {
+func TestSubmitAnswersCompletesWithRussianFallbackWhenFeedbackFails(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	expected := errors.New("feedback unavailable")
@@ -608,18 +608,15 @@ func TestSubmitAnswersFailsSessionWhenFeedbackGenerationFails(t *testing.T) {
 		secondAnswers[question.ID] = "A"
 	}
 
-	_, err = service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[1].ID, secondAnswers)
-	if !errors.Is(err, expected) {
-		t.Fatalf("error = %v, want wrapped feedback error", err)
+	completed, err := service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[1].ID, secondAnswers)
+	if err != nil || completed.Status != domain.SessionCompleted || completed.Feedback == nil || !domain.RussianText(completed.Feedback.Summary) {
+		t.Fatalf("completed=%+v err=%v", completed, err)
+	}
+	restored, err := repository.GetSession(context.Background(), session.ID, 7)
+	if err != nil || restored.Status != domain.SessionCompleted {
+		t.Fatalf("fallback completion not saved: %+v %v", restored, err)
 	}
 
-	failed, err := repository.GetSession(context.Background(), session.ID, 7)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if failed.Status != domain.SessionFailed {
-		t.Fatalf("status = %q, want %q", failed.Status, domain.SessionFailed)
-	}
 }
 
 func TestBuildRoundRequestIncludesCourseContext(t *testing.T) {

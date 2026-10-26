@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Necromemeser/Cringearium-go/services/courses/internal/adapters/ai"
 	courseshttp "github.com/Necromemeser/Cringearium-go/services/courses/internal/adapters/http"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/adapters/postgres"
 	"github.com/Necromemeser/Cringearium-go/services/courses/internal/application"
@@ -55,6 +56,12 @@ func main() {
 	mux.HandleFunc("GET /internal/courses/{id}/ai-context", handler.GetAIContext)
 	mux.HandleFunc("GET /internal/admin/courses", handler.GetAdminCourses)
 	mux.HandleFunc("GET /internal/admin/assessment-results", handler.GetAdminAssessmentResults)
+	aiURL := os.Getenv("AI_TESTS_URL")
+	if aiURL == "" {
+		aiURL = "http://ai-tests:8085"
+	}
+	research := application.NewResearch(db, ai.NewResearchClient(aiURL))
+	courseshttp.NewResearchHandler(research).Register(mux)
 
 	server := &http.Server{
 		Addr:              ":8082",

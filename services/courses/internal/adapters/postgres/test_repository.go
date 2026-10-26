@@ -11,8 +11,9 @@ import (
 
 func (db *DB) FindTestByPageID(ctx context.Context, userID, pageID int64) (*domain.Test, error) {
 	const query = `
-		SELECT t.id, t.page_id, t.passing_score, p.title
+		SELECT t.id, t.page_id, t.passing_score, p.title, COALESCE(d.kind,''),COALESCE(d.scope,'course')
 		FROM tests t
+LEFT JOIN assessment_definitions d ON d.test_id=t.id
 		JOIN course_pages p ON p.id = t.page_id
 		JOIN course_sections s ON s.id = p.section_id
 		JOIN course_access ca ON ca.course_id = s.course_id AND ca.user_id = $1
@@ -24,8 +25,9 @@ func (db *DB) FindTestByPageID(ctx context.Context, userID, pageID int64) (*doma
 
 func (db *DB) FindTestByID(ctx context.Context, userID, testID int64) (*domain.Test, error) {
 	const query = `
-		SELECT t.id, t.page_id, t.passing_score, p.title
+		SELECT t.id, t.page_id, t.passing_score, p.title, COALESCE(d.kind,''),COALESCE(d.scope,'course')
 		FROM tests t
+LEFT JOIN assessment_definitions d ON d.test_id=t.id
 		JOIN course_pages p ON p.id = t.page_id
 		JOIN course_sections s ON s.id = p.section_id
 		JOIN course_access ca ON ca.course_id = s.course_id AND ca.user_id = $1
@@ -77,7 +79,7 @@ func (db *DB) FindLatestTestAttempt(ctx context.Context, userID, testID int64) (
 
 func (db *DB) findTest(ctx context.Context, query string, args ...any) (*domain.Test, error) {
 	test := new(domain.Test)
-	if err := db.conn.QueryRowxContext(ctx, query, args...).Scan(&test.ID, &test.PageID, &test.PassingScore, &test.PageTitle); err != nil {
+	if err := db.conn.QueryRowxContext(ctx, query, args...).Scan(&test.ID, &test.PageID, &test.PassingScore, &test.PageTitle, &test.AssessmentType, &test.AssessmentScope); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -191,10 +193,10 @@ func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []do
 	}
 	const assessmentQuery = `
 		INSERT INTO assessment_results (
-			test_attempt_id, user_id, course_id, page_id, assessment_type, score, answers, completed_at
+			test_attempt_id, user_id, course_id, page_id, assessment_type, score, answers, completed_at,assessment_scope,form_hash,instrument_snapshot
 		)
 		SELECT $1, $2, s.course_id, p.id, $7,
-			$3, $4::jsonb, $5
+			$3, $4::jsonb, $5,$8,$9,$10::jsonb
 		FROM tests t
 		JOIN course_pages p ON p.id = t.page_id
 		JOIN course_sections s ON s.id = p.section_id
@@ -202,7 +204,7 @@ func (db *DB) SubmitTest(ctx context.Context, userID, testID int64, answers []do
 		ON CONFLICT (test_attempt_id) DO NOTHING
 	`
 	if effects.AssessmentType != "" {
-		if _, err := tx.ExecContext(ctx, assessmentQuery, attemptID, userID, score, string(answersJSON), completedAt, testID, effects.AssessmentType); err != nil {
+		if _, err := tx.ExecContext(ctx, assessmentQuery, attemptID, userID, score, string(answersJSON), completedAt, testID, effects.AssessmentType, effects.AssessmentScope, effects.FormHash, string(effects.InstrumentSnapshot)); err != nil {
 			return nil, err
 		}
 	}

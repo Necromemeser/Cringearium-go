@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -47,5 +48,28 @@ func TestProfileRouteIsAuthorizedAndNotTreatedAsSessionID(t *testing.T) {
 	}
 	if service.calls != 1 {
 		t.Fatalf("invalid requests reached use case: %d", service.calls)
+	}
+}
+
+func TestCompletedResponseHasReadableRussianFeedbackAndRoundResults(t *testing.T) {
+	session := domain.AdaptiveSession{Status: domain.SessionCompleted, Feedback: &domain.AdaptiveFeedback{Summary: "Round 1 was strong"}, Rounds: []domain.AdaptiveRound{{ID: 1, Status: domain.RoundCompleted, LearningPlan: []domain.QuestionTarget{{Reason: "prerequisite"}}, Questions: []domain.AdaptiveQuestion{{ID: 1, TopicTitle: "Линейные уравнения"}}, Answers: []domain.AdaptiveAnswer{{QuestionID: 1, IsCorrect: true}}}}}
+	response := toSessionResponse(session)
+	if response.Rounds[0].Purpose != "prerequisite_review" || response.Rounds[0].CorrectCount != 1 || response.Rounds[0].AnsweredCount != 1 {
+		t.Fatalf("wrong round result: %+v", response.Rounds)
+	}
+	raw, err := json.Marshal(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	topic := payload["feedback"].(map[string]any)["mastered_topics"].([]any)[0].(map[string]any)
+	if topic["title"] != "Линейные уравнения" || topic["reason"] == nil {
+		t.Fatalf("empty result card: %s", raw)
+	}
+	if strings.Contains(string(raw), "Round 1") {
+		t.Fatalf("untranslated summary: %s", raw)
 	}
 }

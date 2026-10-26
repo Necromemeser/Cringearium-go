@@ -8,6 +8,7 @@ import Link from './components/common/Link'
 import AboutPage from './pages/AboutPage'
 import AdminPage from './pages/AdminPage'
 import CoursePage from './pages/CoursePage'
+import CourseCompletionPage from './pages/CourseCompletionPage'
 import ChatPage from './pages/ChatPage'
 import CoursesPage from './pages/CoursesPage'
 import HomePage from './pages/HomePage'
@@ -58,7 +59,8 @@ function App() {
   else if (path === '/admin') page = <AdminPage user={user} />
   else {
     const match = path.match(/^\/courses\/(\d+)$/)
-    page = match ? <CoursePage courseId={Number(match[1])} user={user} /> : (
+    const completed = path.match(/^\/courses\/(\d+)\/completed$/)
+    page = completed ? <CourseCompletionPage courseId={Number(completed[1])} user={user} /> : match ? <CoursePage courseId={Number(match[1])} user={user} /> : (
       <main className="page"><div className="container empty-page"><h1>404</h1><p>Страница не найдена.</p><Link href="/" className="button button-primary">На главную</Link></div></main>
     )
   }

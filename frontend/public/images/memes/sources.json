@@ -1,0 +1,52 @@
+[
+  {
+    "file": "doge.jpg",
+    "title": "Doge",
+    "credit": "Ацуко Сато, фотография Кабосу",
+    "origin_url": "https://knowyourmeme.com/memes/doge",
+    "download_url": "https://raw.githubusercontent.com/jacebrowning/memegen/main/templates/doge/default.jpg",
+    "retrieved_at": "2026-10-26",
+    "sha256": "17168539cd19221ef3c506b37eb615bbc47c05bf6ac437c589f1abfef8976b98",
+    "note": "Фотографическая основа, без добавленных подписей"
+  },
+  {
+    "file": "distracted-boyfriend.jpg",
+    "title": "Distracted Boyfriend",
+    "credit": "Антонио Гиллем, постановочная стоковая фотография",
+    "origin_url": "https://knowyourmeme.com/memes/distracted-boyfriend",
+    "download_url": "https://raw.githubusercontent.com/jacebrowning/memegen/main/templates/db/default.jpg",
+    "retrieved_at": "2026-10-26",
+    "sha256": "4b498053b2748b2b6e5cce79d84b5c0ed060ad4edcc90c62ba08f3cb8eb13796",
+    "note": "Фотография-шаблон, без учебных подписей"
+  },
+  {
+    "file": "drake.png",
+    "title": "Drakeposting",
+    "credit": "Кадры клипа Drake — Hotline Bling",
+    "origin_url": "https://knowyourmeme.com/memes/drakeposting",
+    "download_url": "https://raw.githubusercontent.com/jacebrowning/memegen/main/templates/drake/default.png",
+    "retrieved_at": "2026-10-26",
+    "sha256": "c09a28f6bdee3d55b67ac2e83c5e151204a5dd8411036e2ed676917b2cffe9af",
+    "note": "Двухкадровый шаблон, без добавленных подписей"
+  },
+  {
+    "file": "buzz-and-woody.jpg",
+    "title": "X, X Everywhere",
+    "credit": "Disney/Pixar, кадр из «Истории игрушек»",
+    "origin_url": "https://imgflip.com/memetemplate/X-Everywhere",
+    "download_url": "https://raw.githubusercontent.com/jacebrowning/memegen/main/templates/buzz/default.jpg",
+    "retrieved_at": "2026-10-26",
+    "sha256": "dfee851809943cc2dd55698caf8717e349b615b3682e653b0d10d0a1fda629c7",
+    "note": "Кадр-шаблон, без добавленных подписей"
+  },
+  {
+    "file": "this-is-fine-crop.png",
+    "title": "This is fine",
+    "credit": "KC Green, Gunshow №648",
+    "origin_url": "https://gunshowcomic.com/648",
+    "download_url": "https://raw.githubusercontent.com/jacebrowning/memegen/main/templates/fine/default.png",
+    "retrieved_at": "2026-10-26",
+    "sha256": "afd90312ed4dabbe8223486d51438e26735a8f19cda0dd0bdd834cd2c481bb64",
+    "note": "Распространённый фрагмент без речевого облака; не полная оригинальная полоса"
+  }
+]

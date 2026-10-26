@@ -83,6 +83,7 @@ func main() {
 
 	mux.Handle("GET /api/admin/users", gateway.adminProxy(gateway.authURL, "/api/auth/users"))
 	mux.Handle("GET /api/admin/courses", gateway.adminProxy(gateway.coursesURL, "/internal/admin/courses"))
+	mux.Handle("/api/admin/research/", gateway.researchProxy())
 	mux.Handle("GET /api/admin/assessment-results", gateway.adminProxy(gateway.coursesURL, "/internal/admin/assessment-results"))
 	mux.Handle("GET /api/admin/ai-tests", gateway.adminProxy(gateway.aiTestsURL, "/internal/admin/adaptive-tests"))
 
@@ -279,4 +280,15 @@ func envOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func (g *Gateway) researchProxy() http.Handler {
+	proxy := httputil.NewSingleHostReverseProxy(g.coursesURL)
+	original := proxy.Director
+	proxy.Director = func(r *http.Request) {
+		original(r)
+		r.URL.Path = "/internal/admin/research/" + strings.TrimPrefix(r.URL.Path, "/api/admin/research/")
+		r.URL.RawPath = ""
+	}
+	return g.requireAdmin(proxy)
 }

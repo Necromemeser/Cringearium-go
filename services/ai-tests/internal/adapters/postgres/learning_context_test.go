@@ -18,10 +18,14 @@ import (
 type fixedCourse struct {
 	calls  int
 	skills []domain.LearningSkill
+	custom *ports.CourseContext
 }
 
 func (c *fixedCourse) GetCourseContext(context.Context, int64, int64, *int64) (ports.CourseContext, error) {
 	c.calls++
+	if c.custom != nil {
+		return *c.custom, nil
+	}
 	return ports.CourseContext{Skills: c.skills, CourseID: 42, CourseTitle: "Python", TopicTitle: "Input practice", Materials: []ports.CourseMaterial{{PageID: 10, Title: "Input", Content: "input returns a string"}}, AllowedTopics: []ports.CourseTopic{{PageID: 10, Title: "Input"}}}, nil
 }
 
@@ -306,6 +310,26 @@ func TestPersistentSkillProfilePlansAndAtomicEvidence(t *testing.T) {
 		t.Fatalf("concurrent evidence lost or duplicated: %+v %v", profile, err)
 	}
 
+	events, truncated, err := repo.ResearchEvents(ctx, []int64{42})
+	if err != nil || truncated || len(events) == 0 {
+		t.Fatalf("research source: %d %v %v", len(events), truncated, err)
+	}
+	found := false
+	for _, event := range events {
+		if event.QuestionID != nil && *event.QuestionID == first.Questions[0].ID {
+			found = true
+			if event.UserID != 7 || event.CourseID != 42 || event.Model == nil || event.PromptVersion == nil || event.PolicyVersion == nil || event.IsCorrect == nil || event.QuestionText == nil {
+				t.Fatalf("research metadata missing: %+v", event)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("answered question omitted from research export")
+	}
+	otherEvents, _, err := repo.ResearchEvents(ctx, []int64{99})
+	if err != nil || len(otherEvents) != 0 {
+		t.Fatal("course filter leaked data")
+	}
 	// Persisted plans allow inspecting why each question was assigned.
 	restored, err := repo.GetSession(ctx, second.ID, 7)
 	if err != nil || len(restored.Rounds[1].LearningPlan) != 3 || restored.Rounds[1].Questions[0].SkillCode != "math.linear.balance" {
@@ -339,5 +363,75 @@ func TestSkillEvidenceSurvivesNextRoundGenerationFailure(t *testing.T) {
 	profile, err := service.GetLearningProfile(ctx, 7, 42, &scope)
 	if err != nil || profile.Skills[0].State.NovelAnswers != 3 || profile.Skills[0].State.CorrectAnswers != 3 {
 		t.Fatalf("evidence lost after generator failure: %+v %v", profile, err)
+	}
+}
+
+func TestReviewRoundReturnsToCoreTopicAndHistoricalFeedbackReloads(t *testing.T) {
+	conn := testsupport.Postgres(t)
+	db := &DB{conn: conn, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewRepository(db)
+	ctx := context.Background()
+	scope := int64(100)
+	state := domain.SkillState{Code: "linear", NovelAnswers: 2, Recent: []bool{false, false}}
+	raw, _ := json.Marshal(state)
+	if _, err := conn.Exec(`INSERT INTO learner_skill_states(user_id,skill_code,state) VALUES(7,'linear',$1)`, string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	course := &fixedCourse{custom: &ports.CourseContext{CourseID: 42, CourseTitle: "Математика", Materials: []ports.CourseMaterial{{PageID: 10, Title: "Квадратные уравнения", Content: "D=b²-4ac"}, {PageID: 20, Title: "Линейные уравнения", Content: "ax+b=c"}}, AllowedTopics: []ports.CourseTopic{{PageID: 10, Title: "Квадратные уравнения"}, {PageID: 20, Title: "Линейные уравнения"}}, Skills: []domain.LearningSkill{{Code: "quadratic", Title: "Квадратные уравнения", PageIDs: []int64{10}, Prerequisites: []string{"linear"}}, {Code: "linear", Title: "Линейные уравнения", PageIDs: []int64{20}, PrerequisiteOnly: true}}}}
+	generator := &recordingGenerator{}
+	service := application.NewAdaptiveTestService(repo, course, generator, repo)
+	session, err := service.CreateSession(ctx, 7, 42, &scope, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := session.Rounds[0]
+	if domain.RoundPurpose(first) != "prerequisite_review" {
+		t.Fatal(first.LearningPlan)
+	}
+	for _, slot := range first.LearningPlan {
+		if slot.SkillCode != "linear" {
+			t.Fatal("mixed review", first.LearningPlan)
+		}
+	}
+	answers := map[int64]string{}
+	for _, q := range first.Questions {
+		answers[q.ID] = "A"
+	}
+	session, err = service.SubmitAnswers(ctx, 7, session.ID, first.ID, answers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := session.Rounds[1]
+	if domain.RoundPurpose(second) != "practice" {
+		t.Fatal(second.LearningPlan)
+	}
+	for _, slot := range second.LearningPlan {
+		if slot.SkillCode != "quadratic" {
+			t.Fatal("prerequisite leaked into core round", second.LearningPlan)
+		}
+	}
+	answers = map[int64]string{}
+	for _, q := range second.Questions {
+		answers[q.ID] = "A"
+	}
+	session, err = service.SubmitAnswers(ctx, 7, session.ID, second.ID, answers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`UPDATE adaptive_feedback SET summary='Round 1 was strong',mastered_topics='[{"Title":"Квадратные уравнения","Reason":"Хороший результат","TopicPageID":10}]' WHERE session_id=$1`, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := repo.GetSession(ctx, session.ID, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Feedback == nil || len(restored.Feedback.MasteredTopics) != 1 || restored.Feedback.MasteredTopics[0].TopicPageID == nil || *restored.Feedback.MasteredTopics[0].TopicPageID != 10 {
+		t.Fatalf("historical feedback not restored: %+v", restored.Feedback)
+	}
+	if !domain.RussianText(domain.LocalizedFeedback(restored).Summary) {
+		t.Fatal("English historical result not localized")
 	}
 }

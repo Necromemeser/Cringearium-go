@@ -3,6 +3,7 @@ import type { User } from '../api/auth'
 import { getAdminAIStats, getAdminAssessmentResults, getAdminChatStats, getAdminCourses, getAdminUsers, type AdminAIStats, type AdminAssessmentResult, type AdminChatStats, type AdminCourse } from '../api/admin'
 import { TOKEN_KEY } from '../constants/auth'
 import './AdminPage.css'
+import ResearchDashboard from '../components/admin/ResearchDashboard'
 
 type Props = {
   user: User | null
@@ -26,24 +27,25 @@ export default function AdminPage({ user }: Props) {
       return
     }
 
-    Promise.all([
-      getAdminUsers(token),
-      getAdminCourses(token),
-      getAdminAIStats(token),
-      getAdminAssessmentResults(token),
-    ])
-      .then(([loadedUsers, loadedCourses, loadedAIStats, loadedAssessmentResults]) => {
-        setUsers(loadedUsers)
-        setCourses(loadedCourses)
-        setAIStats(loadedAIStats)
-        setAssessmentResults(loadedAssessmentResults)
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    Promise.allSettled([getAdminUsers(token), getAdminCourses(token), getAdminAIStats(token), getAdminAssessmentResults(token)])
+      .then(results => {
+        if (cancelled) return
+        const [loadedUsers, loadedCourses, loadedAIStats, loadedAssessmentResults] = results
+        if (loadedUsers.status === 'fulfilled') setUsers(loadedUsers.value)
+        if (loadedCourses.status === 'fulfilled') setCourses(loadedCourses.value)
+        if (loadedAIStats.status === 'fulfilled') setAIStats(loadedAIStats.value)
+        if (loadedAssessmentResults.status === 'fulfilled') setAssessmentResults(loadedAssessmentResults.value)
+        if (results.some(result => result.status === 'rejected')) setError('Часть оперативной статистики недоступна. Раздел исследований загружается независимо; отсутствующие источники нужно проверить перед экспортом.')
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить данные панели'))
-      .finally(() => setLoading(false))
+      .finally(() => { if (!cancelled) setLoading(false) })
 
     getAdminChatStats(token)
-      .then(setChatStats)
-      .catch((e) => setChatStatsError(e instanceof Error ? e.message : 'Не удалось загрузить статистику AI-чата'))
+      .then(data => { if (!cancelled) setChatStats(data) })
+      .catch(() => { if (!cancelled) setChatStatsError('Источник временно недоступен') })
+    return () => { cancelled = true }
   }, [token, user?.role])
 
   if (!user || user.role !== 'admin') {
@@ -62,42 +64,8 @@ export default function AdminPage({ user }: Props) {
     return <main className="page"><div className="container loading-screen">Загружаем панель...</div></main>
   }
 
-  if (error) {
-    return (
-      <main className="page">
-        <div className="container">
-          <div className="form-error">{error}</div>
-        </div>
-      </main>
-    )
-  }
-
   const publishedCourses = courses.filter((course) => course.status === 'published').length
   const totalEnrollments = courses.reduce((sum, course) => sum + course.enrolled_users, 0)
-
-  const assessmentPairs = new Map<string, {
-    userId: number
-    courseId: number
-    courseTitle: string
-    scope: 'trigonometry' | 'course'
-    pretest?: AdminAssessmentResult
-    posttest?: AdminAssessmentResult
-  }>()
-  for (const result of assessmentResults) {
-    const key = `${result.user_id}-${result.course_id}-${result.scope}`
-    const pair = assessmentPairs.get(key) ?? {
-      userId: result.user_id,
-      courseId: result.course_id,
-      courseTitle: result.course_title,
-      scope: result.scope,
-    }
-    if (result.type === 'pretest' && !pair.pretest) pair.pretest = result
-    if (result.type === 'posttest' && !pair.posttest) pair.posttest = result
-    assessmentPairs.set(key, pair)
-  }
-  const comparableAssessments = Array.from(assessmentPairs.values())
-    .filter((pair) => pair.pretest && pair.posttest)
-    .sort((left, right) => left.userId - right.userId || left.courseId - right.courseId || left.scope.localeCompare(right.scope))
 
   const formatAssessmentDate = (value: string) =>
     new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
@@ -111,13 +79,15 @@ export default function AdminPage({ user }: Props) {
           <p>Пользователи, курсы и статистика нейронного контента в одном месте.</p>
         </div>
 
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <ResearchDashboard token={token!} courses={courses} users={users} />
         <section className="admin-stat-grid">
           <StatCard title="Пользователи" value={users.length} caption="зарегистрировано" />
           <StatCard title="Курсы" value={courses.length} caption={`${publishedCourses} опубликовано`} />
           <StatCard title="Записи на курсы" value={totalEnrollments} caption="выдано доступов" />
           <StatCard title="AI-тесты" value={aiStats?.total_sessions ?? 0} caption="создано сессий" />
           <StatCard title="Вопросы AI" value={aiStats?.questions_generated ?? 0} caption="сгенерировано" />
-          <StatCard title="Точность" value={`${(aiStats?.accuracy_percent ?? 0).toFixed(1)}%`} caption="по всем ответам" />
+          <StatCard title="Верные ответы в практике" value={`${(aiStats?.accuracy_percent ?? 0).toFixed(1)}%`} caption="ответы студентов, не эффект ИИ" />
         </section>
 
         <section className="admin-card">
@@ -175,38 +145,10 @@ export default function AdminPage({ user }: Props) {
           <div className="admin-card-heading">
             <div>
               <span className="eyebrow">ИССЛЕДОВАНИЕ ОБУЧЕНИЯ</span>
-              <h2>Входное и итоговое тестирование</h2>
-              <p className="admin-card-description">Результаты сохраняются отдельно от обычной практики. ID участника используется вместо персональных данных.</p>
+              <h2>Архив контрольных попыток</h2>
+              <p className="admin-card-description">Архив включает все попытки. Для сопоставления групп и проверки версий используй раздел исследований выше.</p>
             </div>
             <span className="admin-count">{assessmentResults.length}</span>
-          </div>
-
-          <div className="admin-subsection-heading">
-            <h3>Сравнение результатов участников</h3>
-            <span>Только пары, где есть оба теста</span>
-          </div>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead><tr><th>Участник ID</th><th>Курс</th><th>Объём</th><th>Входной тест</th><th>Итоговый тест</th><th>Изменение</th></tr></thead>
-              <tbody>
-                {comparableAssessments.map((pair) => {
-                  const change = (pair.posttest?.score ?? 0) - (pair.pretest?.score ?? 0)
-                  return (
-                    <tr key={`${pair.userId}-${pair.courseId}-${pair.scope}`}>
-                      <td>{pair.userId}</td>
-                      <td><strong>{pair.courseTitle}</strong><small>Курс ID: {pair.courseId}</small></td>
-                      <td>{pair.scope === 'course' ? 'Весь курс' : 'Только тригонометрия'}</td>
-                      <td>{pair.pretest?.score}%<small>{pair.pretest ? formatAssessmentDate(pair.pretest.completed_at) : ''}</small></td>
-                      <td>{pair.posttest?.score}%<small>{pair.posttest ? formatAssessmentDate(pair.posttest.completed_at) : ''}</small></td>
-                      <td><strong className={change > 0 ? 'assessment-gain' : change < 0 ? 'assessment-loss' : ''}>{change > 0 ? '+' : ''}{change} п. п.</strong></td>
-                    </tr>
-                  )
-                })}
-                {comparableAssessments.length === 0 && (
-                  <tr><td colSpan={6}>Пока нет участников, прошедших оба теста в одном курсе и в одном объёме.</td></tr>
-                )}
-              </tbody>
-            </table>
           </div>
 
           <div className="admin-subsection-heading">
@@ -214,7 +156,7 @@ export default function AdminPage({ user }: Props) {
           </div>
           <div className="admin-table-wrap">
             <table className="admin-table">
-              <thead><tr><th>Участник ID</th><th>Курс</th><th>Объём</th><th>Тип</th><th>Баллы</th><th>Время прохождения</th><th>Ответов сохранено</th></tr></thead>
+              <thead><tr><th>Участник ID</th><th>Курс</th><th>Объём</th><th>Тип</th><th>Баллы</th><th>Дата отправки</th><th>Ответов сохранено</th></tr></thead>
               <tbody>
                 {assessmentResults.map((result) => (
                   <tr key={result.id}>

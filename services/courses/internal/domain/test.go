@@ -1,13 +1,18 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Test struct {
-	ID           int64
-	PageID       int64
-	PageTitle    string
-	PassingScore int
-	Questions    []TestQuestion
+	AssessmentType  string
+	AssessmentScope string
+	ID              int64
+	PageID          int64
+	PageTitle       string
+	PassingScore    int
+	Questions       []TestQuestion
 }
 
 type TestQuestion struct {
@@ -27,10 +32,10 @@ type TestAnswer struct {
 }
 
 type TestAttemptAnswer struct {
-	QuestionID      int64
-	AnswerID        int64
-	CorrectAnswerID int64
-	IsCorrect       bool
+	QuestionID      int64 `json:"question_id"`
+	AnswerID        int64 `json:"answer_id"`
+	CorrectAnswerID int64 `json:"correct_answer_id"`
+	IsCorrect       bool  `json:"is_correct"`
 }
 
 type TestAttempt struct {
@@ -52,6 +57,9 @@ type TestResult struct {
 
 // TestSubmissionEffects are decisions made by the application, persisted together with an attempt.
 type TestSubmissionEffects struct {
-	AssessmentType string
-	CompletePage   bool
+	AssessmentScope    string
+	FormHash           string
+	InstrumentSnapshot json.RawMessage
+	AssessmentType     string
+	CompletePage       bool
 }

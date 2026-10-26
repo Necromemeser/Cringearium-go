@@ -262,7 +262,14 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		append(snapshot.History, roundEvidence(session, "current_adaptive")...),
 	)
 
-	profile, err := s.learningProfile(ctx, userID, snapshot.Course, session.QuestionCount)
+	coreCourse := snapshot.Course
+	coreCourse.Skills = make([]domain.LearningSkill, 0, len(snapshot.Course.Skills))
+	for _, skill := range snapshot.Course.Skills {
+		if !skill.PrerequisiteOnly {
+			coreCourse.Skills = append(coreCourse.Skills, skill)
+		}
+	}
+	profile, err := s.learningProfile(ctx, userID, coreCourse, session.QuestionCount)
 	if err != nil {
 		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, err)
 	}
@@ -612,7 +619,7 @@ func (s *AdaptiveTestService) generateFeedback(
 
 	profile, err := s.learningProfile(ctx, session.UserID, course, session.QuestionCount)
 	if err != nil {
-		return domain.AdaptiveFeedback{}, err
+		return domain.LocalizedFeedback(session), nil
 	}
 	generated, err := s.llm.GenerateFeedback(ctx, ports.GenerateFeedbackRequest{
 		SkillProfile:  profile,
@@ -622,17 +629,18 @@ func (s *AdaptiveTestService) generateFeedback(
 		AllowedTopics: topicsToAllowed(course.AllowedTopics),
 	})
 	if err != nil {
-		return domain.AdaptiveFeedback{}, err
+		return domain.LocalizedFeedback(session), nil
 	}
-
-	return domain.AdaptiveFeedback{
+	feedback := domain.AdaptiveFeedback{
 		SessionID:      session.ID,
 		Summary:        generated.Summary,
 		MasteredTopics: generatedTopicsToDomain(generated.MasteredTopics),
 		TopicsToReview: generatedTopicsToDomain(generated.TopicsToReview),
 		NextSteps:      generatedNextStepsToDomain(generated.NextSteps),
 		CreatedAt:      time.Now(),
-	}, nil
+	}
+	session.Feedback = &feedback
+	return domain.LocalizedFeedback(session), nil
 }
 
 func generatedTopicsToDomain(items []ports.GeneratedTopicFeedback) []domain.TopicFeedback {

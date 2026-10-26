@@ -17,6 +17,9 @@ export type AdaptiveQuestion = {
 }
 
 export type AdaptiveRound = {
+  purpose?: 'practice' | 'prerequisite_review' | 'mixed'
+  correct_count?: number
+  answered_count?: number
   id: number
   round_number: number
   strategy: 'initial' | 'increase_difficulty' | 'targeted_practice'

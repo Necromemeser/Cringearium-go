@@ -224,6 +224,9 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
       )
     : 0
 
+  const completedSet = new Set(progress)
+  const courseCompleted = pages.length > 0 && pages.every(page => completedSet.has(page.id))
+  const isLastPage = currentPage && pages[pages.length - 1]?.id === currentPage.id
   const isFree = course.price === 0
 
   if (accessLoading) {
@@ -318,6 +321,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
               </div>
             </div>
 
+            {courseCompleted && <Link href={`/courses/${course.id}/completed`} className="button button-primary course-finish-link">Итоги курса →</Link>}
             {course.sections.map((section) => (
               <div
                 key={section.id}
@@ -409,7 +413,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
                     courseId={course.id}
                     topicPageId={currentPage.id}
                     token={token || ''}
-                    onCompleted={() => handleTestPassed(currentPage.id)}
+                    onCompleted={() => { void markComplete(currentPage.id) }}
                   />
                 )}
 
@@ -442,135 +446,27 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
                   </button>
                 )}
 
-                {currentPage.type !== 'test' && (
-                  <div className="lesson-navigation">
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      onClick={() => {
-                        const index = pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        )
 
-                        if (index > 0) {
-                          handlePageSelect(
-                            pages[index - 1].id,
-                          )
-                        }
-                      }}
-                      disabled={
-                        pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        ) <= 0
+                {actionError && <p className="form-error" role="alert">{actionError}</p>}
+                <div className="lesson-navigation">
+                  <button type="button" className="button button-secondary"
+                    disabled={pages.findIndex(page => page.id === currentPage.id) <= 0}
+                    onClick={() => {
+                      const index = pages.findIndex(page => page.id === currentPage.id)
+                      if (index > 0) handlePageSelect(pages[index - 1].id)
+                    }}>← Назад</button>
+                  <button type="button" className="button button-primary"
+                    disabled={progressLoading || (isLastPage ? !courseCompleted : !completedSet.has(currentPage.id))}
+                    onClick={() => {
+                      if (isLastPage && courseCompleted) navigate(`/courses/${course.id}/completed`)
+                      else {
+                        const index = pages.findIndex(page => page.id === currentPage.id)
+                        if (index < pages.length - 1) handlePageSelect(pages[index + 1].id)
                       }
-                    >
-                      ← Назад
-                    </button>
+                    }}>{isLastPage ? 'Завершить курс →' : 'Далее →'}</button>
+                </div>
+                {isLastPage && !courseCompleted && <p className="course-finish-hint">Чтобы завершить курс, пройди оставшиеся страницы в меню слева.</p>}
 
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      onClick={() => {
-                        const index = pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        )
-
-                        if (
-                          index <
-                          pages.length - 1
-                        ) {
-                          handlePageSelect(
-                            pages[index + 1].id,
-                          )
-                        }
-                      }}
-                      disabled={
-                        pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        ) >=
-                        pages.length - 1
-                      }
-                    >
-                      Далее →
-                    </button>
-                  </div>
-                )}
-
-                {currentPage.type === 'test' && (
-                  <div className="lesson-navigation">
-                    <button
-                      type="button"
-                      className="button button-secondary"
-                      onClick={() => {
-                        const index = pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        )
-
-                        if (index > 0) {
-                          handlePageSelect(
-                            pages[index - 1].id,
-                          )
-                        }
-                      }}
-                      disabled={
-                        pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        ) <= 0
-                      }
-                    >
-                      ← Назад
-                    </button>
-
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      onClick={() => {
-                        const index = pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        )
-
-                        if (
-                          index <
-                            pages.length - 1 &&
-                          progress.includes(
-                            currentPage.id,
-                          )
-                        ) {
-                          handlePageSelect(
-                            pages[index + 1].id,
-                          )
-                        }
-                      }}
-                      disabled={
-                        !progress.includes(
-                          currentPage.id,
-                        ) ||
-                        pages.findIndex(
-                          (page) =>
-                            page.id ===
-                            currentPage.id,
-                        ) >=
-                          pages.length - 1
-                      }
-                    >
-                      Далее →
-                    </button>
-                  </div>
-                )}
               </>
             ) : (
               <div className="empty-state">

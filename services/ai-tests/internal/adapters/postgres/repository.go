@@ -81,6 +81,31 @@ func (r *Repository) GetSession(ctx context.Context, sessionID string, userID in
 	}
 
 	session.Rounds = rounds
+	if session.Status == domain.SessionCompleted {
+		var row struct {
+			Summary   string
+			Mastered  []byte    `db:"mastered_topics"`
+			Review    []byte    `db:"topics_to_review"`
+			Next      []byte    `db:"next_steps"`
+			CreatedAt time.Time `db:"created_at"`
+		}
+		err := r.db.GetContext(ctx, &row, `SELECT summary,mastered_topics,topics_to_review,next_steps,created_at FROM adaptive_feedback WHERE session_id=$1`, sessionID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return domain.AdaptiveSession{}, err
+		}
+		if err == nil {
+			f := domain.AdaptiveFeedback{SessionID: sessionID, Summary: row.Summary, CreatedAt: row.CreatedAt}
+			for _, field := range []struct {
+				data   []byte
+				target any
+			}{{row.Mastered, &f.MasteredTopics}, {row.Review, &f.TopicsToReview}, {row.Next, &f.NextSteps}} {
+				if err := json.Unmarshal(field.data, field.target); err != nil {
+					return domain.AdaptiveSession{}, err
+				}
+			}
+			session.Feedback = &f
+		}
+	}
 	return session, nil
 }
 

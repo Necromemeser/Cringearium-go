@@ -10,10 +10,11 @@
 
 @media (max-width: 700px) {
   .container { width: min(100% - 28px, 1140px); }
-  .nav-container { min-height: 60px; gap: 10px; }
+  .nav-container { min-height: 60px; gap: 10px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
   .brand { font-size: 1.2rem; }
   .nav-links { display: none; }
-  .nav-actions { margin-left: auto; }
+  .nav-actions { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+  .nav-actions a { overflow-wrap: anywhere; }
   .page { padding-top: 40px; }
   .hero { padding: 58px 0; }
   .feature-grid, .course-grid, .footer-grid { grid-template-columns: 1fr; }

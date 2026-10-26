@@ -9,7 +9,7 @@ import (
 func (db *DB) FindAssessmentResults(ctx context.Context) ([]domain.AssessmentResult, error) {
 	const query = `
 		SELECT ar.id, ar.user_id, ar.course_id, c.title, ar.assessment_type, ar.assessment_scope,
-			ar.score, ar.answers, ar.completed_at
+			ar.score, ar.answers, ar.completed_at,ar.form_hash,ar.instrument_snapshot
 		FROM assessment_results ar
 		JOIN courses c ON c.id = ar.course_id
 		ORDER BY ar.completed_at DESC, ar.id DESC
@@ -33,7 +33,7 @@ func (db *DB) FindAssessmentResults(ctx context.Context) ([]domain.AssessmentRes
 			&result.Scope,
 			&result.Score,
 			&result.Answers,
-			&result.CompletedAt,
+			&result.CompletedAt, &result.FormHash, &result.InstrumentSnapshot,
 		); err != nil {
 			return nil, err
 		}

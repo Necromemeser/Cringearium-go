@@ -56,6 +56,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	aihttp.RegisterRoutes(mux, handler)
+	mux.HandleFunc("GET /internal/admin/research-events", aihttp.ResearchEventsHandler(repository))
 
 	server := &http.Server{
 		Addr:              ":8085",

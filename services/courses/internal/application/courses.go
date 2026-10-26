@@ -340,10 +340,19 @@ func (c *Courses) SubmitTest(ctx context.Context, userID, testID int64, answers 
 
 	effects := domain.TestSubmissionEffects{CompletePage: passed}
 	switch {
+	case test.AssessmentType != "":
+		effects.AssessmentType = test.AssessmentType
 	case strings.HasPrefix(test.PageTitle, "Входной тест:"):
 		effects.AssessmentType = "pretest"
 	case strings.HasPrefix(test.PageTitle, "Итоговый тест:"):
 		effects.AssessmentType = "posttest"
+	}
+	if effects.AssessmentType != "" {
+		effects.AssessmentScope = test.AssessmentScope
+		if effects.AssessmentScope == "" {
+			effects.AssessmentScope = "course"
+		}
+		effects.FormHash, effects.InstrumentSnapshot = domain.InstrumentSnapshot(test)
 	}
 	result, err := c.repository.SubmitTest(ctx, userID, testID, answers, score, passed, effects)
 	if err != nil {

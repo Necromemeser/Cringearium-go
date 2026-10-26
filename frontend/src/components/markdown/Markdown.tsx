@@ -18,6 +18,24 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   return result
 }
 
+// Split GFM rows while preserving escaped pipes and pipes inside inline code.
+function tableCells(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  let code = false
+  const text = line.trim()
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (char === '\\' && text[i + 1] === '|') { cell += '|'; i++; continue }
+    if (char === '`') code = !code
+    if (char === '|' && !code) { cells.push(cell.trim()); cell = '' } else cell += char
+  }
+  cells.push(cell.trim())
+  if (text.startsWith('|')) cells.shift()
+  if (text.endsWith('|') && cells[cells.length - 1] === '') cells.pop()
+  return cells
+}
+
 export default function Markdown({ content }: { content: string }) {
   const lines = content.replace(/\r\n?/g, '\n').split('\n')
   const blocks: ReactNode[] = []
@@ -37,7 +55,12 @@ export default function Markdown({ content }: { content: string }) {
     blocks.push(orderedList ? <ol key={`ol-${blocks.length}`}>{items}</ol> : <ul key={`ul-${blocks.length}`}>{items}</ul>)
     list = []
   }
-  lines.forEach((line) => {
+  const flushUnclosedCode = () => {
+    if (codeBlock) blocks.push(<pre key={`code-${blocks.length}`}><code>{codeBlock.join('\n')}</code></pre>)
+  }
+  let skipThrough = -1
+  lines.forEach((line, index) => {
+    if (index <= skipThrough) return
     const trimmed = line.trim()
     if (codeBlock) {
       if (trimmed.startsWith('```')) {
@@ -62,6 +85,26 @@ export default function Markdown({ content }: { content: string }) {
       return
     }
     if (!trimmed) { flushParagraph(); flushList(); return }
+    const headers = tableCells(trimmed)
+    const separators = tableCells(lines[index + 1] ?? '')
+    if (trimmed.includes('|') && separators.length === headers.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
+      flushParagraph()
+      flushList()
+      const alignments = separators.map(cell => cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left') as ('left' | 'center' | 'right')[]
+      const rows: string[][] = []
+      let next = index + 2
+      while (next < lines.length && lines[next].trim() && lines[next].includes('|') && !lines[next].trim().startsWith('```')) {
+        rows.push(tableCells(lines[next]))
+        next++
+      }
+      blocks.push(<div className="markdown-table-scroll" role="region" aria-label="Таблица из материала курса" tabIndex={0} key={`table-${blocks.length}`}>
+        <table><thead><tr>{headers.map((cell, i) => <th key={i} scope="col" style={{ textAlign: alignments[i] }}>{renderInlineMarkdown(cell)}</th>)}</tr></thead>
+          <tbody>{rows.map((row, r) => <tr key={r}>{headers.map((_, c) => <td key={c} style={{ textAlign: alignments[c] }}>{renderInlineMarkdown(row[c] ?? '')}</td>)}</tr>)}</tbody>
+        </table>
+      </div>)
+      skipThrough = next - 1
+      return
+    }
     const image = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(trimmed)
     if (image) {
       flushParagraph()
@@ -97,6 +140,7 @@ export default function Markdown({ content }: { content: string }) {
     if (/^---+$/.test(trimmed)) { flushParagraph(); flushList(); blocks.push(<hr key={`hr-${blocks.length}`} />); return }
     paragraph.push(trimmed)
   })
+  flushUnclosedCode()
   flushParagraph(); flushList()
   return <div className="markdown-content">{blocks.length ? blocks : <p>Материал этой страницы пока не добавлен.</p>}</div>
 }

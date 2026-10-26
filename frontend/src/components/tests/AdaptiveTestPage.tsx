@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createAdaptiveSession, getAdaptiveSession, submitAdaptiveAnswers, getLearningProfile, type LearningProfile, type AdaptiveSession } from '../../api/adaptiveTests'
+import { createAdaptiveSession, getAdaptiveSession, submitAdaptiveAnswers, type AdaptiveSession } from '../../api/adaptiveTests'
 import './AdaptiveTestPage.css'
-import LearningProfilePanel from './LearningProfilePanel'
+import AdaptiveResults from './AdaptiveResults'
 
 type Props = { courseId: number; topicPageId: number; token: string; onCompleted: () => void }
 
 const storageKey = (courseId: number, topicPageId: number) => `adaptive-test:${courseId}:${topicPageId}`
 
 export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompleted }: Props) {
-  const [profile, setProfile] = useState<LearningProfile | null>(null)
-  const [profileError, setProfileError] = useState('')
   const [session, setSession] = useState<AdaptiveSession | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
@@ -42,6 +40,7 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
           setError('Предыдущий AI-тест завершился с ошибкой. Можно начать новый.')
         } else {
           setSession(restored)
+          if (restored.status === 'completed') onCompleted()
         }
       } catch {
         localStorage.removeItem(storageKey(courseId, topicPageId))
@@ -56,16 +55,6 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
       cancelled = true
     }
   }, [courseId, topicPageId, token])
-
-  useEffect(() => {
-    let cancelled = false
-    setProfile(null)
-    setProfileError('')
-    void getLearningProfile(courseId, topicPageId, token)
-      .then(data => { if (!cancelled) setProfile(data) })
-      .catch(() => { if (!cancelled) setProfileError('Профиль знаний временно недоступен.') })
-    return () => { cancelled = true }
-  }, [courseId, topicPageId, token, session?.current_round, session?.status])
 
   const start = async () => {
     setLoading(true)
@@ -99,10 +88,7 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
       setSession(data)
       setAnswers({})
 
-      if (data.status === 'completed') {
-        localStorage.removeItem(storageKey(courseId, topicPageId))
-        onCompleted()
-      }
+      if (data.status === 'completed') onCompleted()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось отправить ответы')
     } finally {
@@ -116,12 +102,10 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
 
   if (!session) return (
     <div className="adaptive-test-container">
-      <LearningProfilePanel profile={profile} />
-      {profileError && <p role="status">{profileError}</p>}
       <div className="adaptive-intro">
         <span className="adaptive-icon">✦</span>
         <h3>Персональный AI-тест</h3>
-        <p>Пять вопросов по этой теме. После первого раунда следующий набор заданий изменится в зависимости от твоих ответов.</p>
+        <p>Два коротких раунда по пять вопросов. Если перед этой темой нужно освежить основы, сначала будет отдельное повторение, затем — основная практика.</p>
         {error && <div className="form-error">{error}</div>}
         <button type="button" className="button button-primary" onClick={start} disabled={loading}>{loading ? 'Готовим тест...' : 'Начать AI-тест'}</button>
       </div>
@@ -130,21 +114,12 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
 
   if (session.status === 'completed') return (
     <div className="adaptive-test-container">
-      <LearningProfilePanel profile={profile} />
-      <div className="adaptive-feedback">
-        <span className="adaptive-icon">✓</span>
-        <h3>AI-тест завершён</h3>
-        {session.feedback?.summary && <p>{session.feedback.summary}</p>}
-        {session.feedback?.mastered_topics.length ? <section><h4>Что получилось</h4><ul>{session.feedback.mastered_topics.map((x, i) => <li key={i}><strong>{x.title}</strong><span>{x.reason}</span></li>)}</ul></section> : null}
-        {session.feedback?.topics_to_review.length ? <section><h4>Что стоит повторить</h4><ul>{session.feedback.topics_to_review.map((x, i) => <li key={i}><strong>{x.title}</strong><span>{x.reason}</span></li>)}</ul></section> : null}
-        {session.feedback?.next_steps.length ? <section><h4>Следующие шаги</h4><ul>{session.feedback.next_steps.map((x, i) => <li key={i}><strong>{x.title}</strong><span>{x.description}</span></li>)}</ul></section> : null}
-      </div>
+      <AdaptiveResults session={session} />
     </div>
   )
 
   if (!round) return (
     <div className="adaptive-test-container">
-      <LearningProfilePanel profile={profile} />
       <div className="adaptive-feedback">
         <h3>Не удалось найти активный раунд</h3>
         <p>Сессия больше не содержит доступного раунда.</p>
@@ -161,19 +136,24 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
   )
 
   const answered = Object.keys(answers).length
+  const reviewRound = round.purpose === 'prerequisite_review'
 
   return (
     <div className="adaptive-test-container">
-      <LearningProfilePanel profile={profile} />
       <div className="adaptive-meta">
         <div>
           <span>Раунд {session.current_round} из 2</span>
-          <strong>{round.title || 'Адаптивный тест'}</strong>
+          <strong>{reviewRound ? 'Повторение основ' : round.purpose === 'mixed' ? 'Практика с повторением' : 'Основная практика'}</strong>
         </div>
         <span>{answered} / {round.questions.length}</span>
       </div>
 
-      {round.instructions && <p className="adaptive-instructions">{round.instructions}</p>}
+      {reviewRound ? (
+        <div className="adaptive-review-notice" role="note">
+          <strong>Сначала освежим основы</strong>
+          <p>В предыдущих заданиях эти темы вызвали трудности. Это отдельный раунд повторения: после него вернёмся к теме текущего раздела.</p>
+        </div>
+      ) : <p className="adaptive-instructions">Решаем задания по теме текущего раздела. Выбери один ответ в каждом вопросе.</p>}
       {error && <div className="form-error">{error}</div>}
 
       <div className="adaptive-questions">
@@ -213,7 +193,7 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
           onClick={submit}
           disabled={submitting || answered !== round.questions.length}
         >
-          {submitting ? 'Проверяем...' : session.current_round === 1 ? 'Завершить раунд' : 'Завершить тест'}
+          {submitting ? 'Проверяем...' : session.current_round === 1 ? reviewRound ? 'Перейти к основной практике' : 'Завершить раунд' : 'Завершить тест'}
         </button>
       </div>
     </div>

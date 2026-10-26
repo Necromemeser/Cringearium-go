@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const LearningPolicyVersion = "skills-v1"
+const LearningPolicyVersion = "skills-v2-separate-review"
 
 type LearningSkill struct {
 	Code             string   `json:"code"`
@@ -127,6 +127,20 @@ func BuildProfile(skills []LearningSkill, states []SkillState, count int, now ti
 		}
 		candidates = append(candidates, candidate{QuestionTarget{SkillCode: skill.Code, SkillTitle: skill.Title, TopicPageID: skill.PageIDs[0], Difficulty: difficulty, Reason: reason}, priority})
 	}
+	// Prerequisite work is a separate preparation round, never mixed into core practice.
+	hasReview := false
+	for _, candidate := range candidates {
+		if candidate.target.Reason == "prerequisite" {
+			hasReview = true
+		}
+	}
+	filtered := candidates[:0]
+	for _, candidate := range candidates {
+		if (candidate.target.Reason == "prerequisite") == hasReview {
+			filtered = append(filtered, candidate)
+		}
+	}
+	candidates = filtered
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].priority != candidates[j].priority {
 			return candidates[i].priority > candidates[j].priority
