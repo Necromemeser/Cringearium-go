@@ -11,6 +11,7 @@ const (
 )
 
 type AdaptiveQuestion struct {
+	SkillCode   string
 	ID          int64
 	RoundID     int64
 	Position    int

@@ -1,6 +1,9 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
+)
 
 type LLMClient interface {
 	GenerateRound(ctx context.Context, request GenerateRoundRequest) (GeneratedRound, GenerationMetadata, error)
@@ -8,6 +11,8 @@ type LLMClient interface {
 }
 
 type GenerateRoundRequest struct {
+	LearningPlan    []domain.QuestionTarget
+	Skills          []domain.LearningSkill
 	CourseTitle     string
 	TopicTitle      string
 	Materials       []MaterialContext
@@ -35,10 +40,20 @@ type OrdinaryQuestionContext struct {
 	Question       string
 	Options        []string
 	SelectedAnswer string
+	CorrectAnswer  string
+	Answered       bool
 	IsCorrect      bool
 }
 
 type PreviousResultContext struct {
+	TestPageID   int64
+	TestTitle    string
+	Source       string
+	TestID       int64
+	SessionID    string
+	RoundNumber  int
+	CompletedAt  string
+	Questions    []AnsweredQuestionContext
 	TopicPageID  *int64
 	TopicTitle   string
 	CorrectCount int
@@ -57,6 +72,7 @@ type GeneratedRound struct {
 }
 
 type GeneratedQuestion struct {
+	SkillCode        string
 	TopicPageID      *int64
 	TopicTitle       string
 	Question         string
@@ -87,6 +103,7 @@ type GenerationMetadata struct {
 }
 
 type GenerateFeedbackRequest struct {
+	SkillProfile  domain.LearningProfile
 	CourseTitle   string
 	Topics        []FeedbackTopicContext
 	RoundResults  []RoundResultContext
@@ -129,4 +146,13 @@ type GeneratedNextStep struct {
 	Title       string
 	Description string
 	TopicPageID *int64
+}
+
+// AnsweredQuestionContext carries evidence, rather than just a round score.
+type AnsweredQuestionContext struct {
+	Question       string
+	SelectedAnswer string
+	CorrectAnswer  string
+	IsCorrect      bool
+	Difficulty     int
 }

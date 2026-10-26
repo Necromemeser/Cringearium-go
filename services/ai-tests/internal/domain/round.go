@@ -20,6 +20,7 @@ const (
 )
 
 type AdaptiveRound struct {
+	LearningPlan []QuestionTarget
 	ID           int64
 	SessionID    string
 	RoundNumber  int

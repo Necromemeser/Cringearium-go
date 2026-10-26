@@ -52,7 +52,7 @@ func (db *DB) FindLatestTestAttempt(ctx context.Context, userID, testID int64) (
 	}
 
 	const answersQuery = `
-		SELECT question_id, answer_id
+		SELECT question_id, answer_id, is_correct
 		FROM test_attempt_answers
 		WHERE attempt_id = $1
 		ORDER BY question_id
@@ -64,7 +64,7 @@ func (db *DB) FindLatestTestAttempt(ctx context.Context, userID, testID int64) (
 	defer rows.Close()
 	for rows.Next() {
 		answer := domain.TestAttemptAnswer{}
-		if err := rows.Scan(&answer.QuestionID, &answer.AnswerID); err != nil {
+		if err := rows.Scan(&answer.QuestionID, &answer.AnswerID, &answer.IsCorrect); err != nil {
 			return nil, err
 		}
 		attempt.Answers = append(attempt.Answers, answer)

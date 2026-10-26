@@ -8,6 +8,7 @@ import (
 
 // AdaptiveTestServiceUseCases is the input port used by transport adapters.
 type AdaptiveTestServiceUseCases interface {
+	GetLearningProfile(ctx context.Context, userID, courseID int64, topicPageID *int64) (domain.LearningProfile, error)
 	GetAdminStats(ctx context.Context) (domain.AdminAIStats, error)
 	CreateSession(
 		ctx context.Context,

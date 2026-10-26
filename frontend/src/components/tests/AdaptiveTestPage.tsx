@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createAdaptiveSession, getAdaptiveSession, submitAdaptiveAnswers, type AdaptiveSession } from '../../api/adaptiveTests'
+import { createAdaptiveSession, getAdaptiveSession, submitAdaptiveAnswers, getLearningProfile, type LearningProfile, type AdaptiveSession } from '../../api/adaptiveTests'
 import './AdaptiveTestPage.css'
+import LearningProfilePanel from './LearningProfilePanel'
 
 type Props = { courseId: number; topicPageId: number; token: string; onCompleted: () => void }
 
 const storageKey = (courseId: number, topicPageId: number) => `adaptive-test:${courseId}:${topicPageId}`
 
 export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompleted }: Props) {
+  const [profile, setProfile] = useState<LearningProfile | null>(null)
+  const [profileError, setProfileError] = useState('')
   const [session, setSession] = useState<AdaptiveSession | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
@@ -19,6 +22,8 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
     let cancelled = false
 
     const restore = async () => {
+      setSession(null)
+      setAnswers({})
       setLoading(true)
       setError('')
 
@@ -51,6 +56,16 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
       cancelled = true
     }
   }, [courseId, topicPageId, token])
+
+  useEffect(() => {
+    let cancelled = false
+    setProfile(null)
+    setProfileError('')
+    void getLearningProfile(courseId, topicPageId, token)
+      .then(data => { if (!cancelled) setProfile(data) })
+      .catch(() => { if (!cancelled) setProfileError('Профиль знаний временно недоступен.') })
+    return () => { cancelled = true }
+  }, [courseId, topicPageId, token, session?.current_round, session?.status])
 
   const start = async () => {
     setLoading(true)
@@ -101,6 +116,8 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
 
   if (!session) return (
     <div className="adaptive-test-container">
+      <LearningProfilePanel profile={profile} />
+      {profileError && <p role="status">{profileError}</p>}
       <div className="adaptive-intro">
         <span className="adaptive-icon">✦</span>
         <h3>Персональный AI-тест</h3>
@@ -113,6 +130,7 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
 
   if (session.status === 'completed') return (
     <div className="adaptive-test-container">
+      <LearningProfilePanel profile={profile} />
       <div className="adaptive-feedback">
         <span className="adaptive-icon">✓</span>
         <h3>AI-тест завершён</h3>
@@ -126,6 +144,7 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
 
   if (!round) return (
     <div className="adaptive-test-container">
+      <LearningProfilePanel profile={profile} />
       <div className="adaptive-feedback">
         <h3>Не удалось найти активный раунд</h3>
         <p>Сессия больше не содержит доступного раунда.</p>
@@ -145,6 +164,7 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
 
   return (
     <div className="adaptive-test-container">
+      <LearningProfilePanel profile={profile} />
       <div className="adaptive-meta">
         <div>
           <span>Раунд {session.current_round} из 2</span>

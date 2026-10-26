@@ -1,6 +1,14 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"errors"
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
+)
+
+var ErrCourseUnavailable = errors.New("course is unavailable")
+
+var ErrInvalidCourseContext = errors.New("invalid course practice context")
 
 type CourseClient interface {
 	GetCourseContext(
@@ -12,8 +20,10 @@ type CourseClient interface {
 }
 
 type CourseContext struct {
+	Skills        []domain.LearningSkill
 	CourseID      int64
 	CourseTitle   string
+	TopicTitle    string
 	Materials     []CourseMaterial
 	OrdinaryTests []OrdinaryTest
 	TestResults   []OrdinaryTestResult
@@ -34,14 +44,18 @@ type OrdinaryTest struct {
 }
 
 type OrdinaryTestQuestion struct {
-	Question string
-	Options  []string
+	SelectedAnswer string
+	CorrectAnswer  string
+	Answered       bool
+	IsCorrect      bool
+	Question       string
+	Options        []string
 }
 
 type OrdinaryTestResult struct {
 	TestID       int64
-	TopicPageID  *int64
-	TopicTitle   string
+	PageID       int64
+	Title        string
 	CorrectCount int
 	TotalCount   int
 }

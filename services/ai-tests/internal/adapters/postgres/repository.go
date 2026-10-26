@@ -115,15 +115,15 @@ func (r *Repository) GetAdminStats(ctx context.Context) (domain.AdminAIStats, er
 	}
 
 	var rows []struct {
-		ID            string     `db:"id"`
-		UserID        int64      `db:"user_id"`
-		CourseID      int64      `db:"course_id"`
-		TopicPageID   *int64     `db:"topic_page_id"`
-		Status        string     `db:"status"`
-		CurrentRound  int        `db:"current_round"`
-		QuestionCount int        `db:"question_count"`
-		CreatedAt     time.Time  `db:"created_at"`
-		CompletedAt   *time.Time `db:"completed_at"`
+		ID            string         `db:"id"`
+		UserID        int64          `db:"user_id"`
+		CourseID      int64          `db:"course_id"`
+		TopicPageID   *int64         `db:"topic_page_id"`
+		Status        string         `db:"status"`
+		CurrentRound  int            `db:"current_round"`
+		QuestionCount int            `db:"question_count"`
+		CreatedAt     time.Time      `db:"created_at"`
+		CompletedAt   *time.Time     `db:"completed_at"`
 		Summary       sql.NullString `db:"summary"`
 	}
 
@@ -150,16 +150,16 @@ func (r *Repository) GetAdminStats(ctx context.Context) (domain.AdminAIStats, er
 	stats.RecentSessions = make([]domain.AdminAISession, 0, len(rows))
 	for _, row := range rows {
 		stats.RecentSessions = append(stats.RecentSessions, domain.AdminAISession{
-			ID: row.ID,
-			UserID: row.UserID,
-			CourseID: row.CourseID,
-			TopicPageID: row.TopicPageID,
-			Status: domain.SessionStatus(row.Status),
-			CurrentRound: row.CurrentRound,
+			ID:            row.ID,
+			UserID:        row.UserID,
+			CourseID:      row.CourseID,
+			TopicPageID:   row.TopicPageID,
+			Status:        domain.SessionStatus(row.Status),
+			CurrentRound:  row.CurrentRound,
 			QuestionCount: row.QuestionCount,
-			CreatedAt: row.CreatedAt,
-			CompletedAt: row.CompletedAt,
-			Summary: row.Summary.String,
+			CreatedAt:     row.CreatedAt,
+			CompletedAt:   row.CompletedAt,
+			Summary:       row.Summary.String,
 		})
 	}
 
@@ -167,6 +167,10 @@ func (r *Repository) GetAdminStats(ctx context.Context) (domain.AdminAIStats, er
 }
 
 func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) (domain.AdaptiveRound, error) {
+	plan, err := json.Marshal(round.LearningPlan)
+	if err != nil {
+		return domain.AdaptiveRound{}, err
+	}
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return domain.AdaptiveRound{}, err
@@ -180,9 +184,9 @@ func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) 
 			session_id, round_number, strategy, status,
 			title, instructions, model, prompt_version, prompt_hash,
 			input_tokens, output_tokens, generation_error,
-			created_at, completed_at
+			created_at, completed_at, learning_plan
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id
 	`,
 		round.SessionID,
@@ -198,7 +202,7 @@ func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) 
 		round.OutputTokens,
 		round.GenerationError,
 		round.CreatedAt,
-		round.CompletedAt,
+		round.CompletedAt, string(plan),
 	)
 	if err != nil {
 		return domain.AdaptiveRound{}, err
@@ -227,9 +231,9 @@ func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) 
 			INSERT INTO adaptive_questions (
 				round_id, position, topic_page_id, topic_title,
 				question, difficulty, correct_option_key,
-				explanation, knowledge_basis, sources
+				explanation, knowledge_basis, sources, skill_code
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			RETURNING id
 		`,
 			roundID,
@@ -241,7 +245,7 @@ func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) 
 			question.CorrectOptionKey,
 			question.Explanation,
 			question.KnowledgeBasis,
-			sources,
+			sources, question.SkillCode,
 		)
 		if err != nil {
 			return domain.AdaptiveRound{}, err
@@ -280,56 +284,6 @@ func (r *Repository) SaveRound(ctx context.Context, round domain.AdaptiveRound) 
 	}
 
 	return round, nil
-}
-
-func (r *Repository) SaveAnswers(ctx context.Context, sessionID string, roundID int64, answers []domain.AdaptiveAnswer) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	for _, answer := range answers {
-		_, err := tx.ExecContext(ctx, `
-			INSERT INTO adaptive_answers (
-				session_id, round_id, question_id,
-				selected_option_key, is_correct
-			)
-			VALUES ($1, $2, $3, $4, $5)
-		`,
-			sessionID,
-			roundID,
-			answer.QuestionID,
-			answer.SelectedOptionKey,
-			answer.IsCorrect,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
-}
-
-func (r *Repository) CompleteRound(ctx context.Context, sessionID string, roundID int64) error {
-	result, err := r.db.ExecContext(ctx, `
-		UPDATE adaptive_rounds
-		SET status = 'completed', completed_at = NOW()
-		WHERE id = $1 AND session_id = $2 AND status = 'generated'
-	`, roundID, sessionID)
-	if err != nil {
-		return err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return errors.New("round cannot be completed")
-	}
-
-	return nil
 }
 
 func (r *Repository) FailSession(ctx context.Context, sessionID string) error {
@@ -411,21 +365,22 @@ type sessionRow struct {
 }
 
 type roundRow struct {
-	ID               int64          `db:"id"`
-	SessionID        string         `db:"session_id"`
-	RoundNumber      int            `db:"round_number"`
-	Strategy         string         `db:"strategy"`
-	Status           string         `db:"status"`
-	Title            string         `db:"title"`
-	Instructions     string         `db:"instructions"`
-	Model            sql.NullString `db:"model"`
-	PromptVersion    sql.NullString `db:"prompt_version"`
-	PromptHash       sql.NullString `db:"prompt_hash"`
-	InputTokens      sql.NullInt64  `db:"input_tokens"`
-	OutputTokens     sql.NullInt64  `db:"output_tokens"`
-	GenerationError  sql.NullString `db:"generation_error"`
-	CreatedAt        time.Time      `db:"created_at"`
-	CompletedAt      *time.Time     `db:"completed_at"`
+	LearningPlan    []byte         `db:"learning_plan"`
+	ID              int64          `db:"id"`
+	SessionID       string         `db:"session_id"`
+	RoundNumber     int            `db:"round_number"`
+	Strategy        string         `db:"strategy"`
+	Status          string         `db:"status"`
+	Title           string         `db:"title"`
+	Instructions    string         `db:"instructions"`
+	Model           sql.NullString `db:"model"`
+	PromptVersion   sql.NullString `db:"prompt_version"`
+	PromptHash      sql.NullString `db:"prompt_hash"`
+	InputTokens     sql.NullInt64  `db:"input_tokens"`
+	OutputTokens    sql.NullInt64  `db:"output_tokens"`
+	GenerationError sql.NullString `db:"generation_error"`
+	CreatedAt       time.Time      `db:"created_at"`
+	CompletedAt     *time.Time     `db:"completed_at"`
 }
 
 func (r *Repository) getRounds(ctx context.Context, sessionID string) ([]domain.AdaptiveRound, error) {
@@ -434,7 +389,7 @@ func (r *Repository) getRounds(ctx context.Context, sessionID string) ([]domain.
 		SELECT id, session_id, round_number, strategy, status,
 		       title, instructions, model, prompt_version, prompt_hash,
 		       input_tokens, output_tokens, generation_error,
-		       created_at, completed_at
+		       created_at, completed_at, learning_plan
 		FROM adaptive_rounds
 		WHERE session_id = $1
 		ORDER BY round_number
@@ -445,20 +400,25 @@ func (r *Repository) getRounds(ctx context.Context, sessionID string) ([]domain.
 	result := make([]domain.AdaptiveRound, 0, len(rows))
 	for _, row := range rows {
 		round := domain.AdaptiveRound{
-			ID:             row.ID,
-			SessionID:      row.SessionID,
-			RoundNumber:    row.RoundNumber,
-			Strategy:       domain.RoundStrategy(row.Strategy),
-			Status:         domain.RoundStatus(row.Status),
-			Title:          row.Title,
-			Instructions:   row.Instructions,
-			Model:          row.Model.String,
-			PromptVersion:  row.PromptVersion.String,
-			PromptHash:     row.PromptHash.String,
-			CreatedAt:      row.CreatedAt,
-			CompletedAt:    row.CompletedAt,
+			ID:            row.ID,
+			SessionID:     row.SessionID,
+			RoundNumber:   row.RoundNumber,
+			Strategy:      domain.RoundStrategy(row.Strategy),
+			Status:        domain.RoundStatus(row.Status),
+			Title:         row.Title,
+			Instructions:  row.Instructions,
+			Model:         row.Model.String,
+			PromptVersion: row.PromptVersion.String,
+			PromptHash:    row.PromptHash.String,
+			CreatedAt:     row.CreatedAt,
+			CompletedAt:   row.CompletedAt,
 		}
 
+		if len(row.LearningPlan) > 0 {
+			if err := json.Unmarshal(row.LearningPlan, &round.LearningPlan); err != nil {
+				return nil, err
+			}
+		}
 		questions, err := r.getQuestions(ctx, row.ID)
 		if err != nil {
 			return nil, err
@@ -473,7 +433,6 @@ func (r *Repository) getRounds(ctx context.Context, sessionID string) ([]domain.
 
 	return result, nil
 }
-
 
 func (r *Repository) loadAnswers(
 	ctx context.Context,
@@ -525,6 +484,7 @@ type answerRow struct {
 }
 
 type questionRow struct {
+	SkillCode        string         `db:"skill_code"`
 	ID               int64          `db:"id"`
 	RoundID          int64          `db:"round_id"`
 	Position         int            `db:"position"`
@@ -543,7 +503,7 @@ func (r *Repository) getQuestions(ctx context.Context, roundID int64) ([]domain.
 	if err := r.db.SelectContext(ctx, &rows, `
 		SELECT id, round_id, position, topic_page_id, topic_title,
 		       question, difficulty, correct_option_key, explanation,
-		       knowledge_basis, sources
+		       knowledge_basis, sources, skill_code
 		FROM adaptive_questions
 		WHERE round_id = $1
 		ORDER BY position
@@ -561,6 +521,7 @@ func (r *Repository) getQuestions(ctx context.Context, roundID int64) ([]domain.
 		}
 
 		question := domain.AdaptiveQuestion{
+			SkillCode:        row.SkillCode,
 			ID:               row.ID,
 			RoundID:          row.RoundID,
 			Position:         row.Position,
@@ -608,4 +569,3 @@ func emptyJSON(value []byte) []byte {
 }
 
 var _ ports.SessionRepository = (*Repository)(nil)
-

@@ -120,6 +120,24 @@ def main():
         print(f"PASS {fixture['kind']}: failed/passed grading, assessment, progress, duplicate prevention")
     request("GET", "/api/adaptive-tests/" + str(uuid.uuid4()), token=token, expected=404)
     print("PASS missing adaptive session: HTTP 404")
+    request("GET", "/api/adaptive-tests/profile?course_id=1", expected=401)
+    courses = request("GET", "/api/courses")
+    math = next(course for course in courses if course["title"] == "Математика: курс с ИИ")
+    math_id = int(math["id"])
+    request("GET", f"/api/adaptive-tests/profile?course_id={math_id}", token=token, expected=404)
+    request("POST", f"/api/courses/{math_id}/enroll", token=token, expected=201)
+    profile = request("GET", f"/api/adaptive-tests/profile?course_id={math_id}", token=token)
+    assert len(profile["skills"]) == 9
+    assert all(skill["status"] == "insufficient_data" and skill["state"]["novel_answers"] == 0 for skill in profile["skills"])
+    assert len(profile["next_practice"]) == 5
+    assert profile["next_practice"][0]["reason"] == "diagnose"
+    details = request("GET", f"/api/courses/{math_id}")
+    practice = next(page for section in details["sections"] for page in section["pages"] if page["type"] == "ai_test")
+    scoped = request("GET", f"/api/adaptive-tests/profile?course_id={math_id}&topic_page_id={int(practice['id'])}", token=token)
+    assert scoped["skills"] and len(scoped["skills"]) < 9
+    request("GET", f"/api/adaptive-tests/profile?course_id={math_id}&topic_page_id=999999", token=token, expected=400)
+    print("PASS math learning profile: auth/access checks, nine skills, cold start, scoped plan")
+
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/application"
-	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
 )
 
 type Handler struct {
@@ -29,42 +29,44 @@ type createSessionRequest struct {
 }
 
 type submitAnswersRequest struct {
-	RoundID int64            `json:"round_id"`
+	RoundID int64             `json:"round_id"`
 	Answers map[string]string `json:"answers"`
 }
 
 type sessionResponse struct {
-	ID            string            `json:"id"`
-	CourseID      int64             `json:"course_id"`
-	TopicPageID   *int64            `json:"topic_page_id,omitempty"`
+	ID            string               `json:"id"`
+	CourseID      int64                `json:"course_id"`
+	TopicPageID   *int64               `json:"topic_page_id,omitempty"`
 	Status        domain.SessionStatus `json:"status"`
-	CurrentRound  int               `json:"current_round"`
-	QuestionCount int               `json:"question_count"`
-	Rounds        []roundResponse    `json:"rounds"`
-	Feedback      *feedbackResponse  `json:"feedback,omitempty"`
+	CurrentRound  int                  `json:"current_round"`
+	QuestionCount int                  `json:"question_count"`
+	Rounds        []roundResponse      `json:"rounds"`
+	Feedback      *feedbackResponse    `json:"feedback,omitempty"`
 }
 
 type roundResponse struct {
-	ID           int64                `json:"id"`
-	RoundNumber  int                  `json:"round_number"`
-	Strategy     domain.RoundStrategy `json:"strategy"`
-	Status       domain.RoundStatus   `json:"status"`
-	Title        string               `json:"title"`
-	Instructions string               `json:"instructions,omitempty"`
-	Questions    []questionResponse   `json:"questions"`
+	LearningPlan []domain.QuestionTarget `json:"learning_plan,omitempty"`
+	ID           int64                   `json:"id"`
+	RoundNumber  int                     `json:"round_number"`
+	Strategy     domain.RoundStrategy    `json:"strategy"`
+	Status       domain.RoundStatus      `json:"status"`
+	Title        string                  `json:"title"`
+	Instructions string                  `json:"instructions,omitempty"`
+	Questions    []questionResponse      `json:"questions"`
 }
 
 type questionResponse struct {
-	ID             int64                  `json:"id"`
-	Position       int                    `json:"position"`
-	TopicPageID    *int64                 `json:"topic_page_id,omitempty"`
-	TopicTitle     string                 `json:"topic_title,omitempty"`
-	Question       string                 `json:"question"`
-	Difficulty     int                    `json:"difficulty"`
-	KnowledgeBasis domain.KnowledgeBasis `json:"knowledge_basis"`
+	SkillCode      string                  `json:"skill_code,omitempty"`
+	ID             int64                   `json:"id"`
+	Position       int                     `json:"position"`
+	TopicPageID    *int64                  `json:"topic_page_id,omitempty"`
+	TopicTitle     string                  `json:"topic_title,omitempty"`
+	Question       string                  `json:"question"`
+	Difficulty     int                     `json:"difficulty"`
+	KnowledgeBasis domain.KnowledgeBasis   `json:"knowledge_basis"`
 	Sources        []domain.QuestionSource `json:"sources,omitempty"`
-	Explanation    string                 `json:"explanation,omitempty"`
-	Options        []optionResponse       `json:"options"`
+	Explanation    string                  `json:"explanation,omitempty"`
+	Options        []optionResponse        `json:"options"`
 }
 
 type optionResponse struct {
@@ -112,26 +114,26 @@ func (h *Handler) GetAdminStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := adminAIStatsResponse{
-		TotalSessions: stats.TotalSessions,
-		CompletedSessions: stats.CompletedSessions,
-		FailedSessions: stats.FailedSessions,
+		TotalSessions:      stats.TotalSessions,
+		CompletedSessions:  stats.CompletedSessions,
+		FailedSessions:     stats.FailedSessions,
 		QuestionsGenerated: stats.QuestionsGenerated,
-		AnswersSubmitted: stats.AnswersSubmitted,
-		AccuracyPercent: stats.AccuracyPercent,
-		RecentSessions: make([]adminAISession, 0, len(stats.RecentSessions)),
+		AnswersSubmitted:   stats.AnswersSubmitted,
+		AccuracyPercent:    stats.AccuracyPercent,
+		RecentSessions:     make([]adminAISession, 0, len(stats.RecentSessions)),
 	}
 
 	for _, session := range stats.RecentSessions {
 		item := adminAISession{
-			ID: session.ID,
-			UserID: session.UserID,
-			CourseID: session.CourseID,
-			TopicPageID: session.TopicPageID,
-			Status: session.Status,
-			CurrentRound: session.CurrentRound,
+			ID:            session.ID,
+			UserID:        session.UserID,
+			CourseID:      session.CourseID,
+			TopicPageID:   session.TopicPageID,
+			Status:        session.Status,
+			CurrentRound:  session.CurrentRound,
 			QuestionCount: session.QuestionCount,
-			CreatedAt: session.CreatedAt.Format(time.RFC3339),
-			Summary: session.Summary,
+			CreatedAt:     session.CreatedAt.Format(time.RFC3339),
+			Summary:       session.Summary,
 		}
 		if session.CompletedAt != nil {
 			value := session.CompletedAt.Format(time.RFC3339)
@@ -179,8 +181,10 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 			"error", err,
 		)
 		switch {
-		case errors.Is(err, application.ErrInvalidQuestionCount):
+		case errors.Is(err, application.ErrInvalidQuestionCount), errors.Is(err, ports.ErrInvalidCourseContext):
 			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, ports.ErrCourseUnavailable):
+			http.Error(w, "course is unavailable", http.StatusNotFound)
 		case errors.Is(err, application.ErrInvalidGeneratedRound):
 			http.Error(w, "generated test failed validation", http.StatusBadGateway)
 		default:
@@ -310,6 +314,7 @@ func toSessionResponse(session domain.AdaptiveSession) sessionResponse {
 
 	for _, round := range session.Rounds {
 		rr := roundResponse{
+			LearningPlan: round.LearningPlan,
 			ID:           round.ID,
 			RoundNumber:  round.RoundNumber,
 			Strategy:     round.Strategy,
@@ -321,6 +326,7 @@ func toSessionResponse(session domain.AdaptiveSession) sessionResponse {
 
 		for _, question := range round.Questions {
 			qr := questionResponse{
+				SkillCode:      question.SkillCode,
 				ID:             question.ID,
 				Position:       question.Position,
 				TopicPageID:    question.TopicPageID,

@@ -118,35 +118,53 @@ func (c *Courses) GetAIContext(
 		return nil, ErrCourseNotFound
 	}
 
+	var selectedSection *domain.SectionDetails
+	var selectedPage *domain.Page
+	if topicPageID != nil {
+		for i := range course.Sections {
+			for j := range course.Sections[i].Pages {
+				page := &course.Sections[i].Pages[j]
+				if page.ID == *topicPageID {
+					selectedSection, selectedPage = &course.Sections[i], page
+				}
+			}
+		}
+		if selectedPage == nil || (selectedPage.Type != domain.PageTypeTheory && selectedPage.Type != domain.PageTypeAITest) {
+			return nil, ErrPageNotInCourse
+		}
+	}
 	context := &domain.AIContext{
-		CourseID:      course.Course.ID,
-		CourseTitle:   course.Course.Title,
+		CourseID: course.Course.ID, CourseTitle: course.Course.Title,
 		Materials:     make([]domain.AIContextMaterial, 0),
 		OrdinaryTests: make([]domain.AIContextTest, 0),
 		AllowedTopics: make([]domain.AIContextTopic, 0),
 	}
+	if selectedPage != nil {
+		context.TopicTitle = selectedPage.Title
+	}
 
 	for _, section := range course.Sections {
+		if selectedSection != nil && section.Section.ID != selectedSection.Section.ID {
+			continue
+		}
 		for _, page := range section.Pages {
 			if page.Type == domain.PageTypeTheory {
+				if selectedPage != nil && selectedPage.Type == domain.PageTypeTheory && page.ID != selectedPage.ID {
+					continue
+				}
 				context.AllowedTopics = append(context.AllowedTopics, domain.AIContextTopic{
 					PageID: page.ID,
 					Title:  page.Title,
 				})
 
-				if topicPageID == nil || *topicPageID == page.ID {
-					context.Materials = append(context.Materials, domain.AIContextMaterial{
-						PageID:  page.ID,
-						Title:   page.Title,
-						Content: page.Content,
-					})
-				}
+				context.Materials = append(context.Materials, domain.AIContextMaterial{
+					PageID:  page.ID,
+					Title:   page.Title,
+					Content: page.Content,
+				})
 			}
 
 			if page.Type != domain.PageTypeTest {
-				continue
-			}
-			if topicPageID != nil && *topicPageID != page.ID {
 				continue
 			}
 
@@ -158,6 +176,17 @@ func (c *Courses) GetAIContext(
 				continue
 			}
 
+			attempt, err := c.repository.FindLatestTestAttempt(ctx, userID, test.ID)
+			if err != nil {
+				return nil, err
+			}
+			submitted := make(map[int64]domain.TestAttemptAnswer)
+			if attempt != nil {
+				for _, answer := range attempt.Answers {
+					submitted[answer.QuestionID] = answer
+				}
+			}
+
 			ordinaryTest := domain.AIContextTest{
 				ID:        test.ID,
 				PageID:    test.PageID,
@@ -167,24 +196,30 @@ func (c *Courses) GetAIContext(
 
 			for _, question := range test.Questions {
 				q := domain.AIContextQuestion{
+					ID:       question.ID,
 					Question: question.Question,
 					Options:  make([]string, 0, len(question.Answers)),
 				}
 				for _, answer := range question.Answers {
 					q.Options = append(q.Options, answer.Text)
+					if answer.IsCorrect {
+						q.CorrectAnswer = answer.Text
+					}
+					if response, ok := submitted[question.ID]; ok && response.AnswerID == answer.ID {
+						q.SelectedAnswer = answer.Text
+						q.Answered = true
+						q.IsCorrect = response.IsCorrect
+					}
 				}
 				ordinaryTest.Questions = append(ordinaryTest.Questions, q)
 			}
 
 			context.OrdinaryTests = append(context.OrdinaryTests, ordinaryTest)
 
-			attempt, err := c.repository.FindLatestTestAttempt(ctx, userID, test.ID)
-			if err != nil {
-				return nil, err
-			}
 			if attempt != nil {
 				context.TestResults = append(context.TestResults, domain.AIContextResult{
-					TestID:       test.ID,
+					TestID: test.ID,
+					PageID: page.ID, Title: page.Title,
 					CorrectCount: countCorrect(attempt.Answers),
 					TotalCount:   len(test.Questions),
 				})
@@ -192,6 +227,9 @@ func (c *Courses) GetAIContext(
 		}
 	}
 
+	if err := c.addLearningSkills(ctx, course, context); err != nil {
+		return nil, err
+	}
 	return context, nil
 }
 

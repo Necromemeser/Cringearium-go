@@ -50,7 +50,7 @@ func main() {
 	repository := postgres.NewRepository(db)
 	courses := aihttp.NewCoursesClient(logger, coursesURL)
 	llmClient := llm.NewClient(logger, llmURL, os.Getenv("LLM_API_KEY"), llmModel)
-	service := application.NewAdaptiveTestService(repository, courses, llmClient)
+	service := application.NewAdaptiveTestService(repository, courses, llmClient, repository)
 	handler := aihttp.NewHandler(logger, service)
 
 	mux := http.NewServeMux()

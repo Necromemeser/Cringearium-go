@@ -3,6 +3,7 @@ package ports
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
 )
@@ -11,6 +12,8 @@ import (
 var ErrNotFound = errors.New("session not found")
 
 type SessionRepository interface {
+	ListCompletedSessions(ctx context.Context, userID, courseID int64, topicPageID *int64, since time.Time, limit int) ([]domain.AdaptiveSession, error)
+
 	CreateSession(
 		ctx context.Context,
 		session domain.AdaptiveSession,
@@ -28,19 +31,6 @@ type SessionRepository interface {
 		ctx context.Context,
 		round domain.AdaptiveRound,
 	) (domain.AdaptiveRound, error)
-
-	SaveAnswers(
-		ctx context.Context,
-		sessionID string,
-		roundID int64,
-		answers []domain.AdaptiveAnswer,
-	) error
-
-	CompleteRound(
-		ctx context.Context,
-		sessionID string,
-		roundID int64,
-	) error
 
 	CompleteSession(
 		ctx context.Context,

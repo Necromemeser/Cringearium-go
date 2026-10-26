@@ -2,10 +2,11 @@ package application
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
@@ -19,10 +20,10 @@ const (
 )
 
 var (
-	ErrInvalidQuestionCount = errors.New("question count must be between 3 and 10")
-	ErrSessionNotInProgress = errors.New("session is not in progress")
-	ErrRoundNotFound        = errors.New("round not found")
-	ErrInvalidAnswer        = errors.New("invalid answer")
+	ErrInvalidQuestionCount  = errors.New("question count must be between 3 and 10")
+	ErrSessionNotInProgress  = errors.New("session is not in progress")
+	ErrRoundNotFound         = errors.New("round not found")
+	ErrInvalidAnswer         = errors.New("invalid answer")
 	ErrInvalidGeneratedRound = errors.New("invalid generated round")
 )
 
@@ -30,24 +31,26 @@ type AdaptiveTestService struct {
 	repository ports.SessionRepository
 	courses    ports.CourseClient
 	llm        ports.LLMClient
+	learners   ports.LearnerRepository
 }
 
 func NewAdaptiveTestService(
 	repository ports.SessionRepository,
 	courses ports.CourseClient,
 	llm ports.LLMClient,
+	learners ports.LearnerRepository,
 ) *AdaptiveTestService {
 	return &AdaptiveTestService{
 		repository: repository,
 		courses:    courses,
 		llm:        llm,
+		learners:   learners,
 	}
 }
 
 func (s *AdaptiveTestService) GetAdminStats(ctx context.Context) (domain.AdminAIStats, error) {
 	return s.repository.GetAdminStats(ctx)
 }
-
 
 func (s *AdaptiveTestService) CreateSession(
 	ctx context.Context,
@@ -65,14 +68,38 @@ func (s *AdaptiveTestService) CreateSession(
 		return domain.AdaptiveSession{}, fmt.Errorf("get course context: %w", err)
 	}
 
+	if len(courseContext.Materials) == 0 || len(courseContext.AllowedTopics) == 0 {
+		return domain.AdaptiveSession{}, ports.ErrInvalidCourseContext
+	}
+	history, err := s.repository.ListCompletedSessions(ctx, userID, courseID, topicPageID, time.Now().Add(-historyMaxAge), historySessionLimit)
+	if err != nil {
+		return domain.AdaptiveSession{}, fmt.Errorf("load learning history: %w", err)
+	}
+	var evidence []ports.PreviousResultContext
+	for _, past := range history {
+		evidence = append(evidence, roundEvidence(past, "past_adaptive")...)
+	}
+	evidence = scopedEvidence(evidence, courseContext.AllowedTopics)
+	profile, err := s.learningProfile(ctx, userID, courseContext, questionCount)
+	if err != nil {
+		return domain.AdaptiveSession{}, err
+	}
+	snapshot, err := json.Marshal(learningSnapshot{Version: 1, Course: courseContext, History: evidence, InitialProfile: profile})
+	if err != nil {
+		return domain.AdaptiveSession{}, fmt.Errorf("encode learning snapshot: %w", err)
+	}
+
 	request := buildRoundRequest(
 		courseContext,
 		questionCount,
 		1,
 		topicPageID,
 		domain.StrategyInitial,
-		nil,
+		evidence,
 	)
+
+	request.LearningPlan = profile.NextPractice
+	request.Skills = courseContext.Skills
 
 	generated, metadata, err := s.llm.GenerateRound(ctx, request)
 	if err != nil {
@@ -83,6 +110,9 @@ func (s *AdaptiveTestService) CreateSession(
 		return domain.AdaptiveSession{}, err
 	}
 
+	if err := validateLearningPlan(generated, request.LearningPlan); err != nil {
+		return domain.AdaptiveSession{}, err
+	}
 	sessionID := newSessionID()
 
 	now := time.Now()
@@ -95,6 +125,7 @@ func (s *AdaptiveTestService) CreateSession(
 		Status:          domain.SessionInProgress,
 		CurrentRound:    1,
 		QuestionCount:   questionCount,
+		ContextSnapshot: snapshot,
 		CreatedAt:       now,
 	}
 
@@ -110,6 +141,7 @@ func (s *AdaptiveTestService) CreateSession(
 		return domain.AdaptiveSession{}, fmt.Errorf("create session: %w", err)
 	}
 
+	round.LearningPlan = request.LearningPlan
 	savedRound, err := s.repository.SaveRound(ctx, round)
 	if err != nil {
 		return domain.AdaptiveSession{}, fmt.Errorf("save first round: %w", err)
@@ -145,16 +177,22 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		return domain.AdaptiveSession{}, fmt.Errorf("get session: %w", err)
 	}
 
-	if session.Status != domain.SessionInProgress {
-		return domain.AdaptiveSession{}, ErrSessionNotInProgress
-	}
-
 	round, ok := findRound(session, roundID)
 	if !ok {
 		return domain.AdaptiveSession{}, ErrRoundNotFound
 	}
-
-	if round.RoundNumber != session.CurrentRound || round.Status != domain.RoundGenerated {
+	if round.Status == domain.RoundCompleted {
+		if len(answers) != len(round.Answers) {
+			return domain.AdaptiveSession{}, ErrInvalidAnswer
+		}
+		for _, old := range round.Answers {
+			if answers[old.QuestionID] != old.SelectedOptionKey {
+				return domain.AdaptiveSession{}, ErrInvalidAnswer
+			}
+		}
+		return session, nil
+	}
+	if session.Status != domain.SessionInProgress || round.RoundNumber != session.CurrentRound || round.Status != domain.RoundGenerated {
 		return domain.AdaptiveSession{}, ErrSessionNotInProgress
 	}
 
@@ -168,14 +206,14 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		return domain.AdaptiveSession{}, ErrInvalidAnswer
 	}
 
-	if err := s.repository.SaveAnswers(ctx, sessionID, roundID, domainAnswers); err != nil {
-		return domain.AdaptiveSession{}, fmt.Errorf("save answers: %w", err)
+	applied, err := s.learners.SubmitLearningRound(ctx, userID, sessionID, roundID, domainAnswers)
+	if err != nil {
+		return domain.AdaptiveSession{}, fmt.Errorf("save learning round: %w", err)
 	}
 
-	if err := s.repository.CompleteRound(ctx, sessionID, roundID); err != nil {
-		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("complete round: %w", err))
+	if !applied {
+		return s.repository.GetSession(ctx, sessionID, userID)
 	}
-
 	for i := range session.Rounds {
 		if session.Rounds[i].ID == roundID {
 			session.Rounds[i].Status = domain.RoundCompleted
@@ -186,12 +224,12 @@ func (s *AdaptiveTestService) SubmitAnswers(
 	}
 
 	if round.RoundNumber == maxRounds {
-		courseContext, err := s.courses.GetCourseContext(ctx, userID, session.CourseID, session.TopicPageID)
+		snapshot, err := s.sessionContext(ctx, session)
 		if err != nil {
 			return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("get course context for feedback: %w", err))
 		}
 
-		feedback, err := s.generateFeedback(ctx, courseContext, session)
+		feedback, err := s.generateFeedback(ctx, snapshot.Course, session)
 		if err != nil {
 			return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("generate feedback: %w", err))
 		}
@@ -210,34 +248,39 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		strategy = domain.StrategyIncreaseDifficulty
 	}
 
-	courseContext, err := s.courses.GetCourseContext(ctx, userID, session.CourseID, session.TopicPageID)
+	snapshot, err := s.sessionContext(ctx, session)
 	if err != nil {
 		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("get course context for second round: %w", err))
 	}
 
 	request := buildRoundRequest(
-		courseContext,
+		snapshot.Course,
 		session.QuestionCount,
 		2,
 		session.TopicPageID,
 		strategy,
-		[]ports.PreviousResultContext{
-			{
-				CorrectCount: result.CorrectCount,
-				TotalCount:   result.TotalCount,
-			},
-		},
+		append(snapshot.History, roundEvidence(session, "current_adaptive")...),
 	)
+
+	profile, err := s.learningProfile(ctx, userID, snapshot.Course, session.QuestionCount)
+	if err != nil {
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, err)
+	}
+	request.LearningPlan = profile.NextPractice
+	request.Skills = snapshot.Course.Skills
 
 	generated, metadata, err := s.llm.GenerateRound(ctx, request)
 	if err != nil {
 		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("generate second round: %w", err))
 	}
 
-	if err := validateGeneratedRound(generated, topicsToAllowed(courseContext.AllowedTopics), session.QuestionCount); err != nil {
+	if err := validateGeneratedRound(generated, topicsToAllowed(snapshot.Course.AllowedTopics), session.QuestionCount); err != nil {
 		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, err)
 	}
 
+	if err := validateLearningPlan(generated, request.LearningPlan); err != nil {
+		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, err)
+	}
 	round2 := generatedRoundToDomain(
 		generated,
 		metadata,
@@ -246,6 +289,7 @@ func (s *AdaptiveTestService) SubmitAnswers(
 		strategy,
 	)
 
+	round2.LearningPlan = request.LearningPlan
 	savedRound2, err := s.repository.SaveRound(ctx, round2)
 	if err != nil {
 		return domain.AdaptiveSession{}, s.failAfterProcessing(ctx, sessionID, fmt.Errorf("save second round: %w", err))
@@ -341,8 +385,8 @@ func buildRoundRequest(
 	materials := make([]ports.MaterialContext, 0, len(c.Materials))
 	for _, material := range c.Materials {
 		materials = append(materials, ports.MaterialContext{
-			PageID: material.PageID,
-			Title: material.Title,
+			PageID:  material.PageID,
+			Title:   material.Title,
 			Content: material.Content,
 		})
 	}
@@ -355,13 +399,14 @@ func buildRoundRequest(
 	tests := make([]ports.OrdinaryTestContext, 0, len(c.OrdinaryTests))
 	for _, test := range c.OrdinaryTests {
 		item := ports.OrdinaryTestContext{
-			TestID: test.ID,
-			Title: test.Title,
+			TestID:    test.ID,
+			Title:     test.Title,
 			Questions: make([]ports.OrdinaryQuestionContext, 0, len(test.Questions)),
 		}
 		for _, question := range test.Questions {
 			item.Questions = append(item.Questions, ports.OrdinaryQuestionContext{
-				Question: question.Question,
+				Question:       question.Question,
+				SelectedAnswer: question.SelectedAnswer, CorrectAnswer: question.CorrectAnswer, Answered: question.Answered, IsCorrect: question.IsCorrect,
 				Options: question.Options,
 			})
 		}
@@ -371,13 +416,14 @@ func buildRoundRequest(
 	results := make([]ports.PreviousResultContext, 0, len(c.TestResults))
 	for _, result := range c.TestResults {
 		results = append(results, ports.PreviousResultContext{
+			Source: "ordinary_test", TestID: result.TestID, TestPageID: result.PageID, TestTitle: result.Title,
 			CorrectCount: result.CorrectCount,
-			TotalCount: result.TotalCount,
+			TotalCount:   result.TotalCount,
 		})
 	}
 
-	topicTitle := ""
-	if topicPageID != nil {
+	topicTitle := c.TopicTitle
+	if topicTitle == "" && topicPageID != nil {
 		for _, topic := range c.AllowedTopics {
 			if topic.PageID == *topicPageID {
 				topicTitle = topic.Title
@@ -387,14 +433,14 @@ func buildRoundRequest(
 	}
 
 	return ports.GenerateRoundRequest{
-		CourseTitle: c.CourseTitle,
-		TopicTitle: topicTitle,
-		Materials: materials,
-		OrdinaryTests: tests,
-		QuestionCount: questionCount,
-		RoundNumber: roundNumber,
-		Strategy: string(strategy),
-		AllowedTopics: topics,
+		CourseTitle:     c.CourseTitle,
+		TopicTitle:      topicTitle,
+		Materials:       materials,
+		OrdinaryTests:   tests,
+		QuestionCount:   questionCount,
+		RoundNumber:     roundNumber,
+		Strategy:        string(strategy),
+		AllowedTopics:   topics,
 		PreviousResults: append(results, previous...),
 	}
 }
@@ -427,6 +473,7 @@ func generatedRoundToDomain(
 		}
 
 		questions = append(questions, domain.AdaptiveQuestion{
+			SkillCode:        question.SkillCode,
 			RoundID:          0,
 			Position:         i + 1,
 			TopicPageID:      question.TopicPageID,
@@ -442,18 +489,18 @@ func generatedRoundToDomain(
 	}
 
 	return domain.AdaptiveRound{
-		SessionID:    sessionID,
-		RoundNumber:  roundNumber,
-		Strategy:     strategy,
-		Status:       domain.RoundGenerated,
-		Title:        g.Title,
-		Instructions: g.Instructions,
-		Model:        metadata.Model,
+		SessionID:     sessionID,
+		RoundNumber:   roundNumber,
+		Strategy:      strategy,
+		Status:        domain.RoundGenerated,
+		Title:         g.Title,
+		Instructions:  g.Instructions,
+		Model:         metadata.Model,
 		PromptVersion: metadata.PromptVersion,
 		PromptHash:    metadata.PromptHash,
-		InputTokens:  metadata.InputTokens,
-		OutputTokens: metadata.OutputTokens,
-		Questions:    questions,
+		InputTokens:   metadata.InputTokens,
+		OutputTokens:  metadata.OutputTokens,
+		Questions:     questions,
 	}
 }
 
@@ -505,6 +552,9 @@ func validateGeneratedRound(
 			return fmt.Errorf("%w: correct option does not exist", ErrInvalidGeneratedRound)
 		}
 
+		if len(allowed) > 0 && question.TopicPageID == nil {
+			return fmt.Errorf("%w: missing topic page", ErrInvalidGeneratedRound)
+		}
 		if question.TopicPageID != nil {
 			if _, exists := allowed[*question.TopicPageID]; !exists {
 				return fmt.Errorf("%w: unknown topic page", ErrInvalidGeneratedRound)
@@ -548,8 +598,8 @@ func (s *AdaptiveTestService) generateFeedback(
 			for _, question := range round.Questions {
 				if question.ID == answer.QuestionID {
 					result.Topics = append(result.Topics, ports.TopicResultContext{
-						TopicPageID: question.TopicPageID,
-						TopicTitle:  question.TopicTitle,
+						TopicPageID:  question.TopicPageID,
+						TopicTitle:   question.TopicTitle,
 						CorrectCount: boolToInt(answer.IsCorrect),
 						TotalCount:   1,
 					})
@@ -560,7 +610,12 @@ func (s *AdaptiveTestService) generateFeedback(
 		results = append(results, result)
 	}
 
+	profile, err := s.learningProfile(ctx, session.UserID, course, session.QuestionCount)
+	if err != nil {
+		return domain.AdaptiveFeedback{}, err
+	}
 	generated, err := s.llm.GenerateFeedback(ctx, ports.GenerateFeedbackRequest{
+		SkillProfile:  profile,
 		CourseTitle:   course.CourseTitle,
 		Topics:        topics,
 		RoundResults:  results,
@@ -571,12 +626,12 @@ func (s *AdaptiveTestService) generateFeedback(
 	}
 
 	return domain.AdaptiveFeedback{
-		SessionID:       session.ID,
-		Summary:         generated.Summary,
-		MasteredTopics:  generatedTopicsToDomain(generated.MasteredTopics),
-		TopicsToReview:  generatedTopicsToDomain(generated.TopicsToReview),
-		NextSteps:       generatedNextStepsToDomain(generated.NextSteps),
-		CreatedAt:       time.Now(),
+		SessionID:      session.ID,
+		Summary:        generated.Summary,
+		MasteredTopics: generatedTopicsToDomain(generated.MasteredTopics),
+		TopicsToReview: generatedTopicsToDomain(generated.TopicsToReview),
+		NextSteps:      generatedNextStepsToDomain(generated.NextSteps),
+		CreatedAt:      time.Now(),
 	}, nil
 }
 
@@ -601,7 +656,9 @@ func generatedNextStepsToDomain(items []ports.GeneratedNextStep) []domain.NextSt
 }
 
 func boolToInt(value bool) int {
-	if value { return 1 }
+	if value {
+		return 1
+	}
 	return 0
 }
 

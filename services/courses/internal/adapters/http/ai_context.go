@@ -10,12 +10,14 @@ import (
 )
 
 type aiContextResponse struct {
-	CourseID      int64                   `json:"course_id"`
-	CourseTitle   string                  `json:"course_title"`
-	Materials     []aiContextMaterial     `json:"materials"`
-	OrdinaryTests []aiContextTest         `json:"ordinary_tests"`
-	TestResults   []aiContextResult       `json:"test_results"`
-	AllowedTopics []aiContextTopic        `json:"allowed_topics"`
+	Skills        []domain.LearningSkill `json:"skills"`
+	CourseID      int64                  `json:"course_id"`
+	TopicTitle    string                 `json:"topic_title"`
+	CourseTitle   string                 `json:"course_title"`
+	Materials     []aiContextMaterial    `json:"materials"`
+	OrdinaryTests []aiContextTest        `json:"ordinary_tests"`
+	TestResults   []aiContextResult      `json:"test_results"`
+	AllowedTopics []aiContextTopic       `json:"allowed_topics"`
 }
 
 type aiContextMaterial struct {
@@ -25,23 +27,28 @@ type aiContextMaterial struct {
 }
 
 type aiContextTest struct {
-	ID        int64              `json:"id"`
-	PageID    int64              `json:"page_id"`
-	Title     string             `json:"title"`
+	ID        int64               `json:"id"`
+	PageID    int64               `json:"page_id"`
+	Title     string              `json:"title"`
 	Questions []aiContextQuestion `json:"questions"`
 }
 
 type aiContextQuestion struct {
-	Question string   `json:"question"`
-	Options  []string `json:"options"`
+	ID             int64    `json:"id"`
+	SelectedAnswer string   `json:"selected_answer"`
+	CorrectAnswer  string   `json:"correct_answer"`
+	Answered       bool     `json:"answered"`
+	IsCorrect      bool     `json:"is_correct"`
+	Question       string   `json:"question"`
+	Options        []string `json:"options"`
 }
 
 type aiContextResult struct {
-	TestID       int64 `json:"test_id"`
-	PageID       int64 `json:"page_id"`
+	TestID       int64  `json:"test_id"`
+	PageID       int64  `json:"page_id"`
 	Title        string `json:"title"`
-	CorrectCount int   `json:"correct_count"`
-	TotalCount   int   `json:"total_count"`
+	CorrectCount int    `json:"correct_count"`
+	TotalCount   int    `json:"total_count"`
 }
 
 type aiContextTopic struct {
@@ -74,6 +81,10 @@ func (h *Handler) GetAIContext(w http.ResponseWriter, r *http.Request) {
 
 	context, err := h.courses.GetAIContext(r.Context(), userID, courseID, topicPageID)
 	if err != nil {
+		if errors.Is(err, application.ErrPageNotInCourse) {
+			http.Error(w, "invalid practice page", http.StatusBadRequest)
+			return
+		}
 		if errors.Is(err, application.ErrCourseNotFound) {
 			http.Error(w, "course not found", http.StatusNotFound)
 			return
@@ -87,8 +98,10 @@ func (h *Handler) GetAIContext(w http.ResponseWriter, r *http.Request) {
 
 func toAIContextResponse(context *domain.AIContext) aiContextResponse {
 	response := aiContextResponse{
+		Skills:        context.Skills,
 		CourseID:      context.CourseID,
 		CourseTitle:   context.CourseTitle,
+		TopicTitle:    context.TopicTitle,
 		Materials:     make([]aiContextMaterial, 0, len(context.Materials)),
 		OrdinaryTests: make([]aiContextTest, 0, len(context.OrdinaryTests)),
 		TestResults:   make([]aiContextResult, 0, len(context.TestResults)),
@@ -97,23 +110,24 @@ func toAIContextResponse(context *domain.AIContext) aiContextResponse {
 
 	for _, material := range context.Materials {
 		response.Materials = append(response.Materials, aiContextMaterial{
-			PageID: material.PageID,
-			Title: material.Title,
+			PageID:  material.PageID,
+			Title:   material.Title,
 			Content: material.Content,
 		})
 	}
 
 	for _, test := range context.OrdinaryTests {
 		item := aiContextTest{
-			ID: test.ID,
-			PageID: test.PageID,
-			Title: test.Title,
+			ID:        test.ID,
+			PageID:    test.PageID,
+			Title:     test.Title,
 			Questions: make([]aiContextQuestion, 0, len(test.Questions)),
 		}
 		for _, question := range test.Questions {
 			item.Questions = append(item.Questions, aiContextQuestion{
+				ID: question.ID, SelectedAnswer: question.SelectedAnswer, CorrectAnswer: question.CorrectAnswer, Answered: question.Answered, IsCorrect: question.IsCorrect,
 				Question: question.Question,
-				Options: question.Options,
+				Options:  question.Options,
 			})
 		}
 		response.OrdinaryTests = append(response.OrdinaryTests, item)
@@ -122,15 +136,16 @@ func toAIContextResponse(context *domain.AIContext) aiContextResponse {
 	for _, result := range context.TestResults {
 		response.TestResults = append(response.TestResults, aiContextResult{
 			TestID: result.TestID,
+			PageID: result.PageID, Title: result.Title,
 			CorrectCount: result.CorrectCount,
-			TotalCount: result.TotalCount,
+			TotalCount:   result.TotalCount,
 		})
 	}
 
 	for _, topic := range context.AllowedTopics {
 		response.AllowedTopics = append(response.AllowedTopics, aiContextTopic{
 			PageID: topic.PageID,
-			Title: topic.Title,
+			Title:  topic.Title,
 		})
 	}
 

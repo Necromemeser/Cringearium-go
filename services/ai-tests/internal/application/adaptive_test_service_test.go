@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -178,7 +179,7 @@ func testCourseContext() ports.CourseContext {
 			},
 		},
 		TestResults: []ports.OrdinaryTestResult{
-			{TestID: 100, TopicPageID: int64Ptr(10), TopicTitle: "Variables", CorrectCount: 1, TotalCount: 2},
+			{TestID: 100, PageID: 20, Title: "Variables test", CorrectCount: 1, TotalCount: 2},
 		},
 		AllowedTopics: []ports.CourseTopic{
 			{PageID: 10, Title: "Variables"},
@@ -228,7 +229,7 @@ func TestCreateSession(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	llm := &llmClientMock{rounds: []ports.GeneratedRound{generatedRound(3, 10)}}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, int64Ptr(10), 3)
 	if err != nil {
@@ -259,8 +260,7 @@ func TestCreateSessionRejectsInvalidQuestionCount(t *testing.T) {
 	service := NewAdaptiveTestService(
 		newSessionRepositoryMock(),
 		&courseClientMock{context: testCourseContext()},
-		&llmClientMock{},
-	)
+		&llmClientMock{}, newSessionRepositoryMock())
 
 	for _, count := range []int{0, 2, 11} {
 		_, err := service.CreateSession(context.Background(), 7, 42, nil, count)
@@ -279,7 +279,7 @@ func TestSubmitAnswersUsesIncreaseDifficultyWhenAllCorrect(t *testing.T) {
 			generatedRound(3, 11),
 		},
 	}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -316,7 +316,7 @@ func TestSubmitAnswersUsesTargetedPracticeWhenNotAllCorrect(t *testing.T) {
 			generatedRound(3, 10),
 		},
 	}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -365,7 +365,7 @@ func TestSubmitAnswersCompletesSessionAndGeneratesFeedback(t *testing.T) {
 			},
 		},
 	}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -413,7 +413,7 @@ func TestSubmitAnswersRejectsInvalidAnswerCount(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	llm := &llmClientMock{rounds: []ports.GeneratedRound{generatedRound(3, 10)}}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -432,7 +432,7 @@ func TestSubmitAnswersRejectsUnknownOption(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	llm := &llmClientMock{rounds: []ports.GeneratedRound{generatedRound(3, 10)}}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -455,7 +455,7 @@ func TestSubmitAnswersRejectsUnknownRound(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	llm := &llmClientMock{rounds: []ports.GeneratedRound{generatedRound(3, 10)}}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -468,7 +468,7 @@ func TestSubmitAnswersRejectsUnknownRound(t *testing.T) {
 	}
 }
 
-func TestSubmitAnswersRejectsCompletedSession(t *testing.T) {
+func TestSubmitAnswersRetriesCompletedSessionIdempotently(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	llm := &llmClientMock{
@@ -478,7 +478,7 @@ func TestSubmitAnswersRejectsCompletedSession(t *testing.T) {
 		},
 		feedback: ports.GeneratedFeedback{Summary: "Done"},
 	}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -503,17 +503,22 @@ func TestSubmitAnswersRejectsCompletedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[1].ID, secondAnswers)
-	if !errors.Is(err, ErrSessionNotInProgress) {
-		t.Fatalf("error = %v, want ErrSessionNotInProgress", err)
+	retried, err := service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[1].ID, secondAnswers)
+	if err != nil || retried.Status != domain.SessionCompleted || len(llm.roundCalls) != 2 || len(llm.feedbackCalls) != 1 {
+		t.Fatalf("retry changed completion: %+v %v", retried, err)
 	}
+	secondAnswers[session.Rounds[1].Questions[0].ID] = "B"
+	if _, err := service.SubmitAnswers(context.Background(), 7, session.ID, session.Rounds[1].ID, secondAnswers); !errors.Is(err, ErrInvalidAnswer) {
+		t.Fatalf("changed retry accepted: %v", err)
+	}
+
 }
 
 func TestCreateSessionRejectsInvalidGeneratedRound(t *testing.T) {
 	repository := newSessionRepositoryMock()
 	courses := &courseClientMock{context: testCourseContext()}
 	llm := &llmClientMock{rounds: []ports.GeneratedRound{generatedRound(3, 999)}}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	_, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if !errors.Is(err, ErrInvalidGeneratedRound) {
@@ -529,7 +534,7 @@ func TestCreateSessionPropagatesLLMError(t *testing.T) {
 	courses := &courseClientMock{context: testCourseContext()}
 	expected := errors.New("llm unavailable")
 	llm := &llmClientMock{rounds: []ports.GeneratedRound{{}}, roundErr: expected}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	_, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if !errors.Is(err, expected) {
@@ -548,7 +553,7 @@ func TestSubmitAnswersFailsSessionWhenSecondRoundGenerationFails(t *testing.T) {
 		rounds:    []ports.GeneratedRound{generatedRound(3, 10)},
 		roundErrs: []error{nil, expected},
 	}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -582,7 +587,7 @@ func TestSubmitAnswersFailsSessionWhenFeedbackGenerationFails(t *testing.T) {
 		rounds:      []ports.GeneratedRound{generatedRound(3, 10), generatedRound(3, 11)},
 		feedbackErr: expected,
 	}
-	service := NewAdaptiveTestService(repository, courses, llm)
+	service := NewAdaptiveTestService(repository, courses, llm, repository)
 
 	session, err := service.CreateSession(context.Background(), 7, 42, nil, 3)
 	if err != nil {
@@ -648,7 +653,7 @@ func int64Ptr(v int64) *int64 {
 func TestGetSessionNotFoundUsesPortError(t *testing.T) {
 	repo := newSessionRepositoryMock()
 	repo.sessions["owned"] = domain.AdaptiveSession{ID: "owned", UserID: 42}
-	service := NewAdaptiveTestService(repo, nil, nil)
+	service := NewAdaptiveTestService(repo, nil, nil, repo)
 	for _, id := range []string{"missing", "owned"} {
 		if _, err := service.GetSession(context.Background(), 99, id); !errors.Is(err, ErrRoundNotFound) {
 			t.Fatalf("session %q error=%v", id, err)
@@ -656,5 +661,139 @@ func TestGetSessionNotFoundUsesPortError(t *testing.T) {
 	}
 	if session, err := service.GetSession(context.Background(), 42, "owned"); err != nil || session.ID != "owned" {
 		t.Fatalf("session=%+v error=%v", session, err)
+	}
+}
+
+func (r *sessionRepositoryMock) ListCompletedSessions(_ context.Context, userID, courseID int64, topicPageID *int64, since time.Time, limit int) ([]domain.AdaptiveSession, error) {
+	var result []domain.AdaptiveSession
+	for _, s := range r.sessions {
+		if s.UserID != userID || s.CourseID != courseID || s.Status != domain.SessionCompleted || s.CompletedAt == nil || s.CompletedAt.Before(since) {
+			continue
+		}
+		if topicPageID != nil && (s.TopicPageID == nil || *s.TopicPageID != *topicPageID) {
+			continue
+		}
+		result = append(result, cloneSession(s))
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].CompletedAt.After(*result[j].CompletedAt) })
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+func TestCreateSessionRejectsEmptyLearningContext(t *testing.T) {
+	llm := &llmClientMock{}
+	for _, course := range []ports.CourseContext{{}, {Materials: []ports.CourseMaterial{{PageID: 10}}}, {AllowedTopics: []ports.CourseTopic{{PageID: 10}}}} {
+		service := NewAdaptiveTestService(newSessionRepositoryMock(), &courseClientMock{context: course}, llm, newSessionRepositoryMock())
+		if _, err := service.CreateSession(context.Background(), 7, 42, nil, 3); !errors.Is(err, ports.ErrInvalidCourseContext) {
+			t.Fatalf("error=%v", err)
+		}
+	}
+	if len(llm.roundCalls) != 0 {
+		t.Fatal("invalid context reached the generator")
+	}
+}
+
+func TestLegacySessionContextCanStillResume(t *testing.T) {
+	client := &courseClientMock{context: testCourseContext()}
+	service := NewAdaptiveTestService(nil, client, nil, nil)
+	for _, raw := range []string{"", "{}"} {
+		snapshot, err := service.sessionContext(context.Background(), domain.AdaptiveSession{UserID: 7, CourseID: 42, ContextSnapshot: []byte(raw)})
+		if err != nil || snapshot.Version != 1 || snapshot.Course.CourseTitle != "Go" {
+			t.Fatalf("legacy snapshot=%+v err=%v", snapshot, err)
+		}
+	}
+	for _, raw := range []string{`{"Version":999}`, `{broken`} {
+		if _, err := service.sessionContext(context.Background(), domain.AdaptiveSession{ContextSnapshot: []byte(raw)}); err == nil {
+			t.Fatalf("invalid snapshot accepted: %s", raw)
+		}
+	}
+}
+
+func TestGeneratedQuestionsRequireScopedAttribution(t *testing.T) {
+	round := generatedRound(3, 10)
+	round.Questions[0].TopicPageID = nil
+	if err := validateGeneratedRound(round, []ports.AllowedTopic{{PageID: 10}}, 3); !errors.Is(err, ErrInvalidGeneratedRound) {
+		t.Fatalf("unattributed question accepted: %v", err)
+	}
+	round.Questions[0].TopicPageID = int64Ptr(11)
+	if err := validateGeneratedRound(round, []ports.AllowedTopic{{PageID: 10}}, 3); !errors.Is(err, ErrInvalidGeneratedRound) {
+		t.Fatalf("unrelated question accepted: %v", err)
+	}
+}
+
+func TestRoundEvidenceKeepsDifferentTopicErrorsSeparate(t *testing.T) {
+	a, b := int64(10), int64(11)
+	session := domain.AdaptiveSession{ID: "test", Rounds: []domain.AdaptiveRound{{Status: domain.RoundCompleted, RoundNumber: 1,
+		Questions: []domain.AdaptiveQuestion{
+			{ID: 1, TopicPageID: &a, TopicTitle: "Input", Question: "Input?", CorrectOptionKey: "A", Options: []domain.AdaptiveOption{{Key: "A", Text: "string"}, {Key: "B", Text: "number"}}},
+			{ID: 2, TopicPageID: &b, TopicTitle: "Loops", Question: "Loop?", CorrectOptionKey: "A", Options: []domain.AdaptiveOption{{Key: "A", Text: "for"}}},
+			{ID: 3, TopicPageID: &a, Question: "Unanswered"},
+		}, Answers: []domain.AdaptiveAnswer{{QuestionID: 1, SelectedOptionKey: "B", IsCorrect: false}, {QuestionID: 2, SelectedOptionKey: "A", IsCorrect: true}}},
+		{Status: domain.RoundGenerated, Questions: []domain.AdaptiveQuestion{{ID: 4, TopicPageID: &b}}, Answers: []domain.AdaptiveAnswer{{QuestionID: 4, IsCorrect: false}}}}}
+	evidence := roundEvidence(session, "current_adaptive")
+	if len(evidence) != 2 || evidence[0].TotalCount != 1 || evidence[0].CorrectCount != 0 || evidence[0].Questions[0].SelectedAnswer != "number" || evidence[1].CorrectCount != 1 || *evidence[1].TopicPageID != 11 {
+		t.Fatalf("bad topic evidence: %+v", evidence)
+	}
+}
+
+func TestHistoryOutsideCurrentScopeIsIgnored(t *testing.T) {
+	history := []ports.PreviousResultContext{{TopicPageID: int64Ptr(10), CorrectCount: 1}, {TopicPageID: int64Ptr(11)}, {TopicPageID: nil}}
+	got := scopedEvidence(history, []ports.CourseTopic{{PageID: 10}})
+	if len(got) != 1 || *got[0].TopicPageID != 10 || got[0].CorrectCount != 1 {
+		t.Fatalf("unrelated history leaked: %+v", got)
+	}
+}
+
+func TestOrdinaryAssessmentIdentityIsNotConfusedWithTheoryTopic(t *testing.T) {
+	req := buildRoundRequest(testCourseContext(), 3, 1, nil, domain.StrategyInitial, nil)
+	got := req.PreviousResults[0]
+	if got.TestID != 100 || got.TestPageID != 20 || got.TestTitle != "Variables test" || got.TopicPageID != nil || got.TopicTitle != "" {
+		t.Fatalf("assessment confused with topic: %+v", got)
+	}
+}
+
+func (r *sessionRepositoryMock) GetSkillStates(context.Context, int64, []string) ([]domain.SkillState, error) {
+	return nil, nil
+}
+func (r *sessionRepositoryMock) SubmitLearningRound(ctx context.Context, userID int64, sessionID string, roundID int64, answers []domain.AdaptiveAnswer) (bool, error) {
+	if r.sessions[sessionID].UserID != userID {
+		return false, ports.ErrNotFound
+	}
+	if err := r.SaveAnswers(ctx, sessionID, roundID, answers); err != nil {
+		return false, err
+	}
+	return true, r.CompleteRound(ctx, sessionID, roundID)
+}
+
+func TestLearningPlanCannotBeOverriddenByGenerator(t *testing.T) {
+	target := domain.QuestionTarget{SkillCode: "math.linear.balance", TopicPageID: 10, Difficulty: 2}
+	g := generatedRound(3, 10)
+	plan := []domain.QuestionTarget{target, target, target}
+	for i := range g.Questions {
+		g.Questions[i].SkillCode = target.SkillCode
+		g.Questions[i].Difficulty = 2
+	}
+	if err := validateLearningPlan(g, plan); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"skill", "topic", "difficulty"} {
+		modified := g
+		modified.Questions = append([]ports.GeneratedQuestion(nil), g.Questions...)
+		switch field {
+		case "skill":
+			modified.Questions[0].SkillCode = "invented"
+		case "topic":
+			modified.Questions[0].TopicPageID = int64Ptr(11)
+		case "difficulty":
+			modified.Questions[0].Difficulty = 5
+		}
+		if err := validateLearningPlan(modified, plan); !errors.Is(err, ErrInvalidGeneratedRound) {
+			t.Fatalf("generator changed %s: %v", field, err)
+		}
+	}
+	if err := validateLearningPlan(g, nil); !errors.Is(err, ErrInvalidGeneratedRound) {
+		t.Fatal("unplanned skill accepted")
 	}
 }

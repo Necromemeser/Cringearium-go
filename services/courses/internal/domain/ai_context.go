@@ -1,8 +1,10 @@
 package domain
 
 type AIContext struct {
+	Skills        []LearningSkill
 	CourseID      int64
 	CourseTitle   string
+	TopicTitle    string
 	Materials     []AIContextMaterial
 	OrdinaryTests []AIContextTest
 	TestResults   []AIContextResult
@@ -23,8 +25,13 @@ type AIContextTest struct {
 }
 
 type AIContextQuestion struct {
-	Question string
-	Options  []string
+	ID             int64
+	SelectedAnswer string
+	CorrectAnswer  string
+	Answered       bool
+	IsCorrect      bool
+	Question       string
+	Options        []string
 }
 
 type AIContextResult struct {

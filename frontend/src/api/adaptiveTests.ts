@@ -88,3 +88,28 @@ export async function getAdaptiveSession(sessionId: string, token: string): Prom
   if (!response.ok) return parseError(response, 'Не удалось загрузить AI-тест')
   return (await response.json()) as AdaptiveSession
 }
+
+export type LearningTarget = {
+  skill_code: string
+  skill_title: string
+  topic_page_id: number
+  difficulty: number
+  reason: 'diagnose' | 'remediate' | 'practice' | 'challenge' | 'review' | 'prerequisite'
+}
+export type LearningProfile = {
+  skills: {
+    code: string
+    title: string
+    prerequisite_only: boolean
+    status: 'insufficient_data' | 'needs_practice' | 'practicing' | 'provisionally_mastered' | 'review_due'
+    state: { novel_answers: number; correct_answers: number; sessions: number }
+  }[]
+  next_practice: LearningTarget[]
+}
+export async function getLearningProfile(courseId: number, topicPageId: number, token: string): Promise<LearningProfile> {
+  const response = await fetch(`/api/adaptive-tests/profile?course_id=${courseId}&topic_page_id=${topicPageId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) return parseError(response, 'Не удалось загрузить профиль знаний')
+  return await response.json() as LearningProfile
+}

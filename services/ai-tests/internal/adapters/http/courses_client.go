@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -14,12 +15,14 @@ import (
 )
 
 type aiContextResponse struct {
-	CourseID      int64              `json:"course_id"`
-	CourseTitle   string             `json:"course_title"`
-	Materials     []aiContextMaterial `json:"materials"`
-	OrdinaryTests []aiContextTest    `json:"ordinary_tests"`
-	TestResults   []aiContextResult  `json:"test_results"`
-	AllowedTopics []aiContextTopic   `json:"allowed_topics"`
+	Skills        []domain.LearningSkill `json:"skills"`
+	CourseID      int64                  `json:"course_id"`
+	TopicTitle    string                 `json:"topic_title"`
+	CourseTitle   string                 `json:"course_title"`
+	Materials     []aiContextMaterial    `json:"materials"`
+	OrdinaryTests []aiContextTest        `json:"ordinary_tests"`
+	TestResults   []aiContextResult      `json:"test_results"`
+	AllowedTopics []aiContextTopic       `json:"allowed_topics"`
 }
 
 type aiContextMaterial struct {
@@ -36,8 +39,13 @@ type aiContextTest struct {
 }
 
 type aiContextQuestion struct {
-	Question string   `json:"question"`
-	Options  []string `json:"options"`
+	ID             int64    `json:"id"`
+	SelectedAnswer string   `json:"selected_answer"`
+	CorrectAnswer  string   `json:"correct_answer"`
+	Answered       bool     `json:"answered"`
+	IsCorrect      bool     `json:"is_correct"`
+	Question       string   `json:"question"`
+	Options        []string `json:"options"`
 }
 
 type aiContextResult struct {
@@ -112,6 +120,12 @@ func (c *CoursesClient) GetCourseContext(
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound {
+		return ports.CourseContext{}, ports.ErrCourseUnavailable
+	}
+	if response.StatusCode == http.StatusBadRequest {
+		return ports.CourseContext{}, ports.ErrInvalidCourseContext
+	}
 	if response.StatusCode != http.StatusOK {
 		c.logger.Error("courses returned non-success status",
 			"user_id", userID,
@@ -143,8 +157,10 @@ func (c *CoursesClient) GetCourseContext(
 	)
 
 	result := ports.CourseContext{
+		Skills:        payload.Skills,
 		CourseID:      payload.CourseID,
 		CourseTitle:   payload.CourseTitle,
+		TopicTitle:    payload.TopicTitle,
 		Materials:     make([]ports.CourseMaterial, 0, len(payload.Materials)),
 		OrdinaryTests: make([]ports.OrdinaryTest, 0, len(payload.OrdinaryTests)),
 		TestResults:   make([]ports.OrdinaryTestResult, 0, len(payload.TestResults)),
@@ -153,46 +169,44 @@ func (c *CoursesClient) GetCourseContext(
 
 	for _, material := range payload.Materials {
 		result.Materials = append(result.Materials, ports.CourseMaterial{
-			PageID: material.PageID,
-			Title: material.Title,
+			PageID:  material.PageID,
+			Title:   material.Title,
 			Content: material.Content,
 		})
 	}
 
 	for _, test := range payload.OrdinaryTests {
 		item := ports.OrdinaryTest{
-			ID: test.ID,
-			PageID: test.PageID,
-			Title: test.Title,
+			ID:        test.ID,
+			PageID:    test.PageID,
+			Title:     test.Title,
 			Questions: make([]ports.OrdinaryTestQuestion, 0, len(test.Questions)),
 		}
 		for _, question := range test.Questions {
 			item.Questions = append(item.Questions, ports.OrdinaryTestQuestion{
+				SelectedAnswer: question.SelectedAnswer, CorrectAnswer: question.CorrectAnswer, Answered: question.Answered, IsCorrect: question.IsCorrect,
 				Question: question.Question,
-				Options: question.Options,
+				Options:  question.Options,
 			})
 		}
 		result.OrdinaryTests = append(result.OrdinaryTests, item)
 	}
 
 	for _, item := range payload.TestResults {
-		var topicPageID *int64
-		if item.PageID > 0 {
-			topicPageID = &item.PageID
-		}
+
 		result.TestResults = append(result.TestResults, ports.OrdinaryTestResult{
-			TestID: item.TestID,
-			TopicPageID: topicPageID,
-			TopicTitle: item.Title,
+			TestID:       item.TestID,
+			PageID:       item.PageID,
+			Title:        item.Title,
 			CorrectCount: item.CorrectCount,
-			TotalCount: item.TotalCount,
+			TotalCount:   item.TotalCount,
 		})
 	}
 
 	for _, topic := range payload.AllowedTopics {
 		result.AllowedTopics = append(result.AllowedTopics, ports.CourseTopic{
 			PageID: topic.PageID,
-			Title: topic.Title,
+			Title:  topic.Title,
 		})
 	}
 

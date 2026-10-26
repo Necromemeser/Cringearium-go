@@ -7,6 +7,7 @@ import (
 )
 
 type CourseRepository interface {
+	FindLearningSkills(ctx context.Context, courseID int64) ([]domain.LearningSkill, error)
 	FindAll(ctx context.Context) ([]*domain.Course, error)
 	FindAdminCourses(ctx context.Context) ([]domain.AdminCourse, error)
 	FindByID(ctx context.Context, id int64) (*domain.CourseDetails, error)
