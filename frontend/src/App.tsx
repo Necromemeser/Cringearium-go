@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { getMe, login, type User } from './api/auth'
 import { TOKEN_KEY } from './constants/auth'
@@ -20,6 +20,7 @@ import './App.css'
 
 function App() {
   const path = usePath()
+  useLayoutEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }) }, [path])
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
 
@@ -49,7 +50,7 @@ function App() {
   if (authLoading) return <div className="loading-screen">Загружаем...</div>
 
   let page: ReactNode
-  if (path === '/') page = <HomePage courses={[]} />
+  if (path === '/') page = <HomePage />
   else if (path === '/courses') page = <CoursesPage />
   else if (path === '/about') page = <AboutPage />
   else if (path === '/login') page = <LoginPage onLogin={handleLogin} />

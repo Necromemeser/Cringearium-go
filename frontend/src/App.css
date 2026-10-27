@@ -1,6 +1,7 @@
 @import './styles/base.css';
 @import './styles/course.css';
 @import './styles/responsive.css';
+@import './styles/public-pages.css';
 
 .chat-layout {
   display: grid;

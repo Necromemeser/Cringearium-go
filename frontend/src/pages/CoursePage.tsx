@@ -7,6 +7,7 @@ import Markdown from '../components/markdown/Markdown'
 import TestPage from '../components/tests/TestPage'
 import AdaptiveTestPage from '../components/tests/AdaptiveTestPage'
 import { navigate } from '../utils/navigation'
+import { useScrollToLesson } from '../utils/learningScroll'
 export default function CoursePage({ courseId, user }: { courseId: number; user: User | null }) {
   const [course, setCourse] = useState<CourseDetails | null>(null)
   const [loading, setLoading] = useState(true)
@@ -20,6 +21,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
   const [actionError, setActionError] = useState('')
 
   const token = localStorage.getItem(TOKEN_KEY)
+  useScrollToLesson(selectedPage, enrolled && course !== null)
 
   useEffect(() => {
     getCourse(courseId)
@@ -303,7 +305,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
   }
 
   return (
-    <main className="page">
+    <main className="page course-study-page">
       <div className="container">
         <section className="course-learning">
           <aside className="course-sidebar">
@@ -389,7 +391,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
                         : 'AI-ТЕСТ'}
                   </span>
 
-                  <h2>{currentPage.title}</h2>
+                  <h2 tabIndex={-1}>{currentPage.title}</h2>
                 </div>
 
                 {currentPage.type === 'theory' ? (

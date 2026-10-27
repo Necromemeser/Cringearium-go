@@ -39,12 +39,11 @@ export default function RegisterPage() {
       <header className="header">
         <div className="container nav-container">
           <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }}>
-            <span className="brand-icon">⌂</span>
             <span>Cringearium</span>
           </a>
           <nav className="nav-links">
-            <a href="/courses" onClick={(event) => { event.preventDefault(); navigate('/courses') }}>📚 Каталог курсов</a>
-            <a href="/about" onClick={(event) => { event.preventDefault(); navigate('/about') }}>ℹ О нас</a>
+            <a href="/courses" onClick={(event) => { event.preventDefault(); navigate('/courses') }}>Каталог курсов</a>
+            <a href="/about" onClick={(event) => { event.preventDefault(); navigate('/about') }}>О нас</a>
           </nav>
           <nav className="nav-actions">
             <a href="/login" className="login-link" onClick={(event) => { event.preventDefault(); navigate('/login') }}>Войти</a>

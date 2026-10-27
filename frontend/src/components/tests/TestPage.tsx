@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTest, submitTest, type CourseTest, type TestResult } from '../../api/courses'
 import './TestPage.css'
+import { useScrollToLesson } from '../../utils/learningScroll'
 
 type TestPageProps = {
   pageId: number
@@ -16,6 +17,8 @@ export default function TestPage({ pageId, token, onPassed }: TestPageProps) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useScrollToLesson(result?.attempt_id, result !== null && !loading)
 
   useEffect(() => {
     let cancelled = false

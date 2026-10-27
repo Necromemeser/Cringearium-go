@@ -1,5 +1,7 @@
 /* Course learning layout */
-.course-learning { width: 100vw; margin-left: calc(50% - 50vw); display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 68px); margin-bottom: 0; border: 0; border-radius: 0; overflow: visible; background: #fff; box-shadow: none; }
+.page.course-study-page { padding: 0; }
+.course-study-page > .container { width: 100%; }
+.course-learning { width: 100%; margin-left: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 68px); margin-bottom: 0; border: 0; border-radius: 0; overflow: visible; background: #fff; box-shadow: none; }
 .course-sidebar { position: sticky; top: 68px; align-self: start; height: calc(100vh - 68px); overflow-y: auto; background: #0b5ed7; color: #fff; padding: 28px 16px 32px; scrollbar-width: thin; }
 .course-progress { padding: 4px 10px 24px; border-bottom: 1px solid rgba(255,255,255,.2); margin-bottom: 22px; }
 .course-progress > span { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }

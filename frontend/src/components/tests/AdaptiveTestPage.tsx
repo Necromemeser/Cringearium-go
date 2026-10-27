@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createAdaptiveSession, getAdaptiveSession, submitAdaptiveAnswers, type AdaptiveSession } from '../../api/adaptiveTests'
 import './AdaptiveTestPage.css'
 import AdaptiveResults from './AdaptiveResults'
+import { useScrollToLesson } from '../../utils/learningScroll'
 
 type Props = { courseId: number; topicPageId: number; token: string; onCompleted: () => void }
 
@@ -15,6 +16,8 @@ export default function AdaptiveTestPage({ courseId, topicPageId, token, onCompl
   const [error, setError] = useState('')
 
   const round = useMemo(() => session?.rounds.find(r => r.round_number === session.current_round && r.status === 'generated') ?? null, [session])
+
+  useScrollToLesson(session ? `${session.id}:${session.current_round}:${session.status}` : null, session !== null && !loading)
 
   useEffect(() => {
     let cancelled = false
