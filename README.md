@@ -125,36 +125,3 @@ docker compose logs -f
 ```bash
 docker compose down
 ```
-
-## Разработка и проверки
-
-Для работы вне контейнеров нужны Go версии, указанной в [go.mod](go.mod), и Node.js 22.12 или новее из поддерживаемых Vite веток.
-
-Проверка backend из корня репозитория:
-
-```bash
-go test ./...
-```
-
-Интеграционные тесты PostgreSQL дополнительно используют `TEST_DATABASE_URL`. Каждый тест создаёт изолированную схему; без подключения к тестовой базе эти проверки пропускаются.
-
-Проверка frontend:
-
-```bash
-cd frontend
-npm ci
-npm test
-npm run build
-```
-
-Проверка исходников учебного каталога:
-
-```bash
-python3 scripts/build_course_catalog.py --check
-```
-
-GitHub Actions запускает проверки и сборку backend и frontend, собирает Docker-образы и проверяет основные сценарии работы приложения через gateway.
-
-## Лицензия
-
-Исходный код распространяется под лицензией [MIT](LICENSE).
