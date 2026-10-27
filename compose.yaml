@@ -1,0 +1,126 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: cringearium-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth:
+    build:
+      context: .
+      dockerfile: ./services/auth/Dockerfile
+    container_name: cringearium-auth
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_auth?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_TTL: ${JWT_TTL}
+    expose:
+      - "8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  courses:
+    build:
+      context: .
+      dockerfile: ./services/courses/Dockerfile
+    container_name: cringearium-courses
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_courses?sslmode=disable
+    expose:
+      - "8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment:
+    build:
+      context: .
+      dockerfile: ./services/payment/Dockerfile
+    container_name: cringearium-payment
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_payment?sslmode=disable
+    expose:
+      - "8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-chat:
+    build:
+      context: .
+      dockerfile: ./services/ai-chat/Dockerfile
+    container_name: cringearium-ai-chat
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_chat?sslmode=disable
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+    expose:
+      - "8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-tests:
+    build:
+      context: .
+      dockerfile: ./services/ai-tests/Dockerfile
+    container_name: cringearium-ai-tests
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cringearium_ai_tests?sslmode=disable
+      COURSES_URL: http://courses:8082
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+    expose:
+      - "8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      courses:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: ./services/gateway/Dockerfile
+    container_name: cringearium-gateway
+    environment:
+      SERVER_ADDR: :8080
+      AUTH_URL: http://auth:8081
+      COURSES_URL: http://courses:8082
+      AI_TESTS_URL: http://ai-tests:8085
+      AI_CHAT_URL: http://ai-chat:8084
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth:
+        condition: service_started
+      courses:
+        condition: service_started
+      ai-tests:
+        condition: service_started
+      ai-chat:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:

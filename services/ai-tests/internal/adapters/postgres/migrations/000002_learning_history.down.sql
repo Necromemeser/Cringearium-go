@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_adaptive_sessions_learning_history;

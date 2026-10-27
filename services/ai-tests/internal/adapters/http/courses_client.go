@@ -1,0 +1,216 @@
+package http
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/domain"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/Necromemeser/Cringearium-go/services/ai-tests/internal/ports"
+)
+
+type aiContextResponse struct {
+	Skills        []domain.LearningSkill `json:"skills"`
+	CourseID      int64                  `json:"course_id"`
+	TopicTitle    string                 `json:"topic_title"`
+	CourseTitle   string                 `json:"course_title"`
+	Materials     []aiContextMaterial    `json:"materials"`
+	OrdinaryTests []aiContextTest        `json:"ordinary_tests"`
+	TestResults   []aiContextResult      `json:"test_results"`
+	AllowedTopics []aiContextTopic       `json:"allowed_topics"`
+}
+
+type aiContextMaterial struct {
+	PageID  int64  `json:"page_id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type aiContextTest struct {
+	ID        int64               `json:"id"`
+	PageID    int64               `json:"page_id"`
+	Title     string              `json:"title"`
+	Questions []aiContextQuestion `json:"questions"`
+}
+
+type aiContextQuestion struct {
+	ID             int64    `json:"id"`
+	SelectedAnswer string   `json:"selected_answer"`
+	CorrectAnswer  string   `json:"correct_answer"`
+	Answered       bool     `json:"answered"`
+	IsCorrect      bool     `json:"is_correct"`
+	Question       string   `json:"question"`
+	Options        []string `json:"options"`
+}
+
+type aiContextResult struct {
+	TestID       int64  `json:"test_id"`
+	PageID       int64  `json:"page_id"`
+	Title        string `json:"title"`
+	CorrectCount int    `json:"correct_count"`
+	TotalCount   int    `json:"total_count"`
+}
+
+type aiContextTopic struct {
+	PageID int64  `json:"page_id"`
+	Title  string `json:"title"`
+}
+
+type CoursesClient struct {
+	logger  *slog.Logger
+	baseURL string
+	client  *http.Client
+}
+
+func NewCoursesClient(logger *slog.Logger, baseURL string) *CoursesClient {
+	return &CoursesClient{
+		logger:  logger,
+		baseURL: baseURL,
+		client:  &http.Client{},
+	}
+}
+
+func (c *CoursesClient) GetCourseContext(
+	ctx context.Context,
+	userID int64,
+	courseID int64,
+	topicPageID *int64,
+) (ports.CourseContext, error) {
+	start := time.Now()
+
+	u, err := url.Parse(c.baseURL + "/internal/courses/" + strconv.FormatInt(courseID, 10) + "/ai-context")
+	if err != nil {
+		c.logger.Error("failed to build courses request", "course_id", courseID, "error", err)
+		return ports.CourseContext{}, err
+	}
+
+	query := u.Query()
+	if topicPageID != nil {
+		query.Set("topic_page_id", strconv.FormatInt(*topicPageID, 10))
+	}
+	u.RawQuery = query.Encode()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		c.logger.Error("failed to create courses request", "course_id", courseID, "error", err)
+		return ports.CourseContext{}, err
+	}
+	request.Header.Set("X-User-ID", strconv.FormatInt(userID, 10))
+
+	c.logger.Info("requesting course context",
+		"user_id", userID,
+		"course_id", courseID,
+		"topic_page_id", topicPageID,
+	)
+
+	response, err := c.client.Do(request)
+	if err != nil {
+		c.logger.Error("courses request failed",
+			"user_id", userID,
+			"course_id", courseID,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"error", err,
+		)
+		return ports.CourseContext{}, fmt.Errorf("courses request: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound {
+		return ports.CourseContext{}, ports.ErrCourseUnavailable
+	}
+	if response.StatusCode == http.StatusBadRequest {
+		return ports.CourseContext{}, ports.ErrInvalidCourseContext
+	}
+	if response.StatusCode != http.StatusOK {
+		c.logger.Error("courses returned non-success status",
+			"user_id", userID,
+			"course_id", courseID,
+			"status", response.StatusCode,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+		return ports.CourseContext{}, fmt.Errorf("courses returned status %d", response.StatusCode)
+	}
+
+	var payload aiContextResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		c.logger.Error("failed to decode courses response",
+			"user_id", userID,
+			"course_id", courseID,
+			"error", err,
+		)
+		return ports.CourseContext{}, fmt.Errorf("decode courses response: %w", err)
+	}
+
+	c.logger.Info("course context received",
+		"user_id", userID,
+		"course_id", courseID,
+		"materials", len(payload.Materials),
+		"ordinary_tests", len(payload.OrdinaryTests),
+		"test_results", len(payload.TestResults),
+		"allowed_topics", len(payload.AllowedTopics),
+		"duration_ms", time.Since(start).Milliseconds(),
+	)
+
+	result := ports.CourseContext{
+		Skills:        payload.Skills,
+		CourseID:      payload.CourseID,
+		CourseTitle:   payload.CourseTitle,
+		TopicTitle:    payload.TopicTitle,
+		Materials:     make([]ports.CourseMaterial, 0, len(payload.Materials)),
+		OrdinaryTests: make([]ports.OrdinaryTest, 0, len(payload.OrdinaryTests)),
+		TestResults:   make([]ports.OrdinaryTestResult, 0, len(payload.TestResults)),
+		AllowedTopics: make([]ports.CourseTopic, 0, len(payload.AllowedTopics)),
+	}
+
+	for _, material := range payload.Materials {
+		result.Materials = append(result.Materials, ports.CourseMaterial{
+			PageID:  material.PageID,
+			Title:   material.Title,
+			Content: material.Content,
+		})
+	}
+
+	for _, test := range payload.OrdinaryTests {
+		item := ports.OrdinaryTest{
+			ID:        test.ID,
+			PageID:    test.PageID,
+			Title:     test.Title,
+			Questions: make([]ports.OrdinaryTestQuestion, 0, len(test.Questions)),
+		}
+		for _, question := range test.Questions {
+			item.Questions = append(item.Questions, ports.OrdinaryTestQuestion{
+				SelectedAnswer: question.SelectedAnswer, CorrectAnswer: question.CorrectAnswer, Answered: question.Answered, IsCorrect: question.IsCorrect,
+				Question: question.Question,
+				Options:  question.Options,
+			})
+		}
+		result.OrdinaryTests = append(result.OrdinaryTests, item)
+	}
+
+	for _, item := range payload.TestResults {
+
+		result.TestResults = append(result.TestResults, ports.OrdinaryTestResult{
+			TestID:       item.TestID,
+			PageID:       item.PageID,
+			Title:        item.Title,
+			CorrectCount: item.CorrectCount,
+			TotalCount:   item.TotalCount,
+		})
+	}
+
+	for _, topic := range payload.AllowedTopics {
+		result.AllowedTopics = append(result.AllowedTopics, ports.CourseTopic{
+			PageID: topic.PageID,
+			Title:  topic.Title,
+		})
+	}
+
+	return result, nil
+}
+
+var _ ports.CourseClient = (*CoursesClient)(nil)

@@ -1,0 +1,23 @@
+package ports
+
+import (
+	"context"
+
+	"github.com/Necromemeser/Cringearium-go/services/courses/internal/domain"
+)
+
+type CourseRepository interface {
+	FindLearningSkills(ctx context.Context, courseID int64) ([]domain.LearningSkill, error)
+	FindAll(ctx context.Context) ([]*domain.Course, error)
+	FindAdminCourses(ctx context.Context) ([]domain.AdminCourse, error)
+	FindByID(ctx context.Context, id int64) (*domain.CourseDetails, error)
+	FindEnrolled(ctx context.Context, userID int64) ([]*domain.Course, error)
+	HasAccess(ctx context.Context, userID, courseID int64) (bool, error)
+	GrantAccess(ctx context.Context, userID, courseID int64) error
+	GetCompletedPages(ctx context.Context, userID, courseID int64) ([]int64, error)
+	CompletePage(ctx context.Context, userID, pageID int64) error
+	FindTestByPageID(ctx context.Context, userID, pageID int64) (*domain.Test, error)
+	FindTestByID(ctx context.Context, userID, testID int64) (*domain.Test, error)
+	FindLatestTestAttempt(ctx context.Context, userID, testID int64) (*domain.TestAttempt, error)
+	SubmitTest(ctx context.Context, userID, testID int64, answers []domain.TestAttemptAnswer, score int, passed bool, effects domain.TestSubmissionEffects) (*domain.TestResult, error)
+}

@@ -1,0 +1,123 @@
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+
+	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/domain"
+	"github.com/Necromemeser/Cringearium-go/services/ai-chat/internal/ports"
+)
+
+type Repository struct{ db *DB }
+func NewRepository(db *DB) *Repository { return &Repository{db: db} }
+
+func (r *Repository) CreateOrReuseEmptyConversation(ctx context.Context, conversation domain.Conversation) (domain.Conversation, error) {
+	tx, err := r.db.conn.BeginTxx(ctx, nil)
+	if err != nil {
+		return domain.Conversation{}, err
+	}
+	defer tx.Rollback()
+	// Serialize draft creation for this owner, including requests from other tabs/instances.
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('chat-draft:'||$1::bigint::text,0))`, conversation.UserID); err != nil {
+		return domain.Conversation{}, err
+	}
+	var result domain.Conversation
+	err = tx.QueryRowxContext(ctx, `SELECT c.id,c.user_id AS userid,c.name,c.created_at AS createdat,c.updated_at AS updatedat
+ FROM conversations c WHERE c.user_id=$1 AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=c.id)
+ ORDER BY c.updated_at DESC,c.id DESC LIMIT 1 FOR UPDATE OF c`, conversation.UserID).StructScan(&result)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = tx.QueryRowxContext(ctx, `INSERT INTO conversations(user_id,name,created_at,updated_at) VALUES($1,$2,$3,$4)
+  RETURNING id,user_id AS userid,name,created_at AS createdat,updated_at AS updatedat`, conversation.UserID, conversation.Name, conversation.CreatedAt, conversation.UpdatedAt).StructScan(&result)
+	}
+	if err != nil {
+		return domain.Conversation{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Conversation{}, err
+	}
+	return result, nil
+}
+
+func (r *Repository) GetConversation(ctx context.Context, id, userID int64) (domain.Conversation, error) {
+	var result domain.Conversation
+	err := r.db.conn.QueryRowxContext(ctx, `
+		SELECT id, user_id AS userid, name, created_at AS createdat, updated_at AS updatedat FROM conversations
+		WHERE id = $1 AND user_id = $2
+	`, id, userID).StructScan(&result)
+	if errors.Is(err, sql.ErrNoRows) { return domain.Conversation{}, ports.ErrNotFound }
+	return result, err
+}
+func (r *Repository) ListConversations(ctx context.Context, userID int64) ([]domain.Conversation, error) {
+	var rows []domain.Conversation
+	err := r.db.conn.SelectContext(ctx, &rows, `
+		SELECT id, user_id AS userid, name, created_at AS createdat, updated_at AS updatedat FROM conversations
+		WHERE user_id = $1 ORDER BY updated_at DESC, id DESC
+	`, userID)
+	return rows, err
+}
+func (r *Repository) DeleteConversation(ctx context.Context, id, userID int64) error {
+	result, err := r.db.conn.ExecContext(ctx, `DELETE FROM conversations WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil { return err }
+	count, err := result.RowsAffected(); if err != nil { return err }
+	if count == 0 { return ports.ErrNotFound }
+	return nil
+}
+func (r *Repository) ListMessages(ctx context.Context, conversationID, userID int64) ([]domain.Message, error) {
+	if _, err := r.GetConversation(ctx, conversationID, userID); err != nil { return nil, err }
+	var rows []domain.Message
+	err := r.db.conn.SelectContext(ctx, &rows, `
+		SELECT id, conversation_id AS conversationid, user_id AS userid, content, is_ai_response AS isairesponse, created_at AS createdat
+		FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC, id ASC
+	`, conversationID)
+	return rows, err
+}
+func (r *Repository) SaveMessage(ctx context.Context, message domain.Message) (domain.Message, error) {
+	var result domain.Message
+	err := r.db.conn.QueryRowxContext(ctx, `
+		INSERT INTO messages (conversation_id, user_id, content, is_ai_response)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, conversation_id AS conversationid, user_id AS userid, content, is_ai_response AS isairesponse, created_at AS createdat
+	`, message.ConversationID, message.UserID, message.Content, message.IsAIResponse).StructScan(&result)
+	if err != nil { return domain.Message{}, err }
+	_, err = r.db.conn.ExecContext(ctx, `UPDATE conversations SET updated_at = $1 WHERE id = $2`, result.CreatedAt, result.ConversationID)
+	return result, err
+}
+
+func (r *Repository) UpdateConversationName(ctx context.Context, conversationID, userID int64, name string) error {
+	result, err := r.db.conn.ExecContext(ctx, `UPDATE conversations SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`, name, conversationID, userID)
+	if err != nil { return err }
+	count, err := result.RowsAffected(); if err != nil { return err }
+	if count == 0 { return ports.ErrNotFound }
+	return nil
+}
+func (r *Repository) ReserveAIRequest(ctx context.Context, userID int64, limit int) (int, error) {
+	var count int
+	err := r.db.conn.QueryRowContext(ctx, `
+		INSERT INTO ai_daily_usage (user_id, usage_date, request_count)
+		VALUES ($1, CURRENT_DATE, 1)
+		ON CONFLICT (user_id, usage_date) DO UPDATE
+		SET request_count = ai_daily_usage.request_count + 1
+		WHERE ai_daily_usage.request_count < $2
+		RETURNING request_count
+	`, userID, limit).Scan(&count)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ports.ErrDailyLimitReached
+	}
+	return count, err
+}
+
+func (r *Repository) GetAdminStats(ctx context.Context) (domain.AdminStats, error) {
+	var stats domain.AdminStats
+	queries := []struct{ target *int64; query string }{
+		{&stats.Conversations, `SELECT COUNT(*) FROM conversations`},
+		{&stats.Messages, `SELECT COUNT(*) FROM messages`},
+		{&stats.UserMessages, `SELECT COUNT(*) FROM messages WHERE is_ai_response = FALSE`},
+		{&stats.AIMessages, `SELECT COUNT(*) FROM messages WHERE is_ai_response = TRUE`},
+		{&stats.ActiveUsers, `SELECT COUNT(DISTINCT user_id) FROM conversations`},
+	}
+	for _, item := range queries { if err := r.db.conn.GetContext(ctx, item.target, item.query); err != nil { return domain.AdminStats{}, err } }
+	return stats, nil
+}
+var ErrNotFound = errors.New("conversation not found")
+var _ ports.Repository = (*Repository)(nil)
