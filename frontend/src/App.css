@@ -2,6 +2,7 @@
 @import './styles/course.css';
 @import './styles/responsive.css';
 @import './styles/public-pages.css';
+@import './styles/mobile-navigation.css';
 
 .chat-layout {
   display: grid;

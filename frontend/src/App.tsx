@@ -33,12 +33,16 @@ function App() {
       .finally(() => setAuthLoading(false))
   }, [])
 
+  useEffect(() => {
+    if (!authLoading && path === '/chat' && !user) navigate('/login?next=/chat', { replace: true })
+  }, [path, user, authLoading])
+
   const handleLogin = async (email: string, password: string) => {
     const token = await login(email, password)
     localStorage.setItem(TOKEN_KEY, token)
     const user = await getMe(token)
     setUser(user)
-    navigate('/profile')
+    navigate(new URLSearchParams(window.location.search).get('next') === '/chat' ? '/chat' : '/profile')
   }
 
   const handleLogout = () => {
@@ -54,9 +58,9 @@ function App() {
   else if (path === '/courses') page = <CoursesPage />
   else if (path === '/about') page = <AboutPage />
   else if (path === '/login') page = <LoginPage onLogin={handleLogin} />
-  else if (path === '/register') page = <RegisterPage />
+  else if (path === '/register') page = <RegisterPage onRegistered={async () => { const token = localStorage.getItem(TOKEN_KEY); if (token) setUser(await getMe(token)); navigate('/profile') }} />
   else if (path === '/profile') page = <ProfilePage user={user} />
-  else if (path === '/chat') page = <ChatPage />
+  else if (path === '/chat') page = user ? <ChatPage /> : null
   else if (path === '/admin') page = <AdminPage user={user} />
   else {
     const match = path.match(/^\/courses\/(\d+)$/)

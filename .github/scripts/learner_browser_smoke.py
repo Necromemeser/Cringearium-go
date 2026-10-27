@@ -89,8 +89,13 @@ def main():
             page.wait_for_function("""() => {
                 const heading = document.querySelector('.lesson-header').getBoundingClientRect();
                 const header = document.querySelector('.header').getBoundingClientRect();
-                return heading.top >= header.bottom - 1 && heading.top <= header.bottom + 24;
+                const toolbar = document.querySelector('.course-mobile-toolbar').getBoundingClientRect().height;
+                return heading.top >= header.bottom + toolbar - 1 && heading.top <= header.bottom + toolbar + 24;
             }""")
+        def select_page(name):
+            target = page.get_by_role('button', name=name)
+            if page.evaluate("matchMedia('(max-width: 700px)').matches") and not target.is_visible(): page.locator('.course-mobile-toolbar button').click()
+            target.click()
         def scroll_down():
             page.evaluate('window.scrollTo({top: document.body.scrollHeight, behavior: "instant"})')
             assert page.evaluate('window.scrollY > 100')
@@ -107,9 +112,9 @@ def main():
         assert page.evaluate("Math.abs(document.querySelector('.course-learning').getBoundingClientRect().top - document.querySelector('.header').getBoundingClientRect().bottom) <= 1"), 'Gap above course on mobile'
         # On mobile the lesson must appear below the sticky header, past the course menu.
         scroll_down()
-        page.get_by_role('button', name='Практика: квадратные уравнения').click()
+        select_page('Практика: квадратные уравнения')
         at_lesson_top()
-        page.get_by_role('button', name='Таблицы тригонометрии').click()
+        select_page('Таблицы тригонометрии')
         at_lesson_top()
         page.set_viewport_size({'width': VIEWPORT_WIDTH, 'height': 900})
         scroll_down()
@@ -137,8 +142,8 @@ def main():
         expect(page.get_by_text('Верных ответов: 4 из 5.', exact=True)).to_be_visible()
         expect(page.get_by_text('English generated instructions', exact=True)).to_have_count(0)
         page.reload()
-        expect(page.get_by_role('button', name='Практика: квадратные уравнения')).to_be_visible()
-        page.get_by_role('button', name='Практика: квадратные уравнения').click()
+        expect(page.locator('.lesson-panel')).to_be_visible()
+        select_page('Практика: квадратные уравнения')
         expect(page.get_by_role('heading', name='Практика завершена')).to_be_visible()
         at_lesson_top()
         assert state['saved_ai'], 'AI completion was not persisted'

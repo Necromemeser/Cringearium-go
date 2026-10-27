@@ -4,7 +4,7 @@ import { login, register } from '../api/auth'
 import { TOKEN_KEY } from '../constants/auth'
 import { navigate } from '../utils/navigation'
 
-export default function RegisterPage() {
+export default function RegisterPage({ onRegistered }: { onRegistered: () => Promise<void> }) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +26,7 @@ export default function RegisterPage() {
       await register(username, email, password)
       const token = await login(email, password)
       localStorage.setItem(TOKEN_KEY, token)
-      navigate('/profile')
+      await onRegistered()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось зарегистрироваться')
     } finally {
@@ -35,22 +35,6 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="header">
-        <div className="container nav-container">
-          <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }}>
-            <span>Cringearium</span>
-          </a>
-          <nav className="nav-links">
-            <a href="/courses" onClick={(event) => { event.preventDefault(); navigate('/courses') }}>Каталог курсов</a>
-            <a href="/about" onClick={(event) => { event.preventDefault(); navigate('/about') }}>О нас</a>
-          </nav>
-          <nav className="nav-actions">
-            <a href="/login" className="login-link" onClick={(event) => { event.preventDefault(); navigate('/login') }}>Войти</a>
-          </nav>
-        </div>
-      </header>
-
       <main className="auth-page">
         <div className="auth-card">
           <div className="auth-icon">✦</div>
@@ -111,26 +95,5 @@ export default function RegisterPage() {
           </p>
         </div>
       </main>
-
-      <footer className="footer">
-        <div className="container footer-grid">
-          <div>
-            <div className="footer-brand">Cringearium</div>
-            <p>Образовательная платформа, где учиться немного проще.</p>
-          </div>
-          <div>
-            <h3>Навигация</h3>
-            <a href="/courses" onClick={(event) => { event.preventDefault(); navigate('/courses') }}>Каталог курсов</a>
-            <a href="/about" onClick={(event) => { event.preventDefault(); navigate('/about') }}>О нас</a>
-            <a href="/login" onClick={(event) => { event.preventDefault(); navigate('/login') }}>Вход</a>
-          </div>
-          <div>
-            <h3>Проект</h3>
-            <a href="https://github.com/Necromemeser/Cringearium-go" target="_blank" rel="noreferrer">GitHub</a>
-            <span>© 2026 Cringearium</span>
-          </div>
-        </div>
-      </footer>
-    </div>
   )
 }

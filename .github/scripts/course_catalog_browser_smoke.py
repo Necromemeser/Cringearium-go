@@ -34,6 +34,10 @@ def main():
             page = context.new_page()
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.on('response', lambda response: errors.append(response.url) if '/images/' in response.url and response.status >= 400 else None)
+            def select_page(title):
+                target = page.locator('.course-page-button').filter(has_text=title)
+                if page.evaluate("matchMedia('(max-width: 700px)').matches") and not target.is_visible(): page.locator('.course-mobile-toolbar button').click()
+                target.click()
             lessons = practice = images = 0
             for subject in catalog:
                 for variant in ['control', 'adaptive']:
@@ -43,7 +47,7 @@ def main():
                     assert len(profile['skills']) == 6
                     page.goto(f'{BASE}/courses/{cid}')
                     for material in subject['pages']:
-                        page.locator('.course-page-button').filter(has_text=material['title']).click()
+                        select_page(material['title'])
                         lesson = page.locator('.lesson-content')
                         expect(lesson).to_contain_text('Самопроверка')
                         for img in lesson.locator('img').all():
@@ -51,18 +55,20 @@ def main():
                             expect(img).to_have_js_property('complete', True)
                             assert img.evaluate('e => e.naturalWidth > 0'), img.get_attribute('src')
                             images += 1
+                        if subject['key'] == 'memology':
+                            expect(lesson.locator('a[href^="http"]')).to_have_count(0)
                         lessons += 1
                     if variant == 'control':
                         for section in subject['sections']:
-                            page.locator('.course-page-button').filter(has_text='Самостоятельная практика: ' + section).click()
+                            select_page('Самостоятельная практика: ' + section)
                             expect(page.locator('.lesson-panel input[type=radio]')).to_have_count(24)
                             practice += 1
                     page.set_viewport_size({'width': 390, 'height': 844})
-                    page.locator('.course-page-button').filter(has_text=subject['pages'][0]['title']).click()
+                    select_page(subject['pages'][0]['title'])
                     expect(page.locator('.lesson-content')).to_contain_text('Самопроверка')
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), subject['key']
                     if subject['key'] == 'memology' and variant == 'adaptive':
-                        page.locator('.course-page-button').filter(has_text='Шаблон, ожидание и панчлайн').click()
+                        select_page('Шаблон, ожидание и панчлайн')
                         expect(page.locator('.lesson-content img')).to_have_count(1)
                         page.locator('.lesson-content img').scroll_into_view_if_needed()
                         page.screenshot(path='/tmp/enriched-memology-mobile.png', full_page=True)

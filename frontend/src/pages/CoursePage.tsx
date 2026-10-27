@@ -7,7 +7,8 @@ import Markdown from '../components/markdown/Markdown'
 import TestPage from '../components/tests/TestPage'
 import AdaptiveTestPage from '../components/tests/AdaptiveTestPage'
 import { navigate } from '../utils/navigation'
-import { useScrollToLesson } from '../utils/learningScroll'
+import { scrollToLesson, useScrollToLesson } from '../utils/learningScroll'
+import CourseNavigation from '../components/courses/CourseNavigation'
 export default function CoursePage({ courseId, user }: { courseId: number; user: User | null }) {
   const [course, setCourse] = useState<CourseDetails | null>(null)
   const [loading, setLoading] = useState(true)
@@ -132,6 +133,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
 
   const handlePageSelect = (pageId: number) => {
     setSelectedPage(pageId)
+    if (pageId === selectedPage) scrollToLesson()
   }
 
   const handleTestPassed = (pageId: number) => {
@@ -308,7 +310,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
     <main className="page course-study-page">
       <div className="container">
         <section className="course-learning">
-          <aside className="course-sidebar">
+          <CourseNavigation progress={progressPercent}>
             <div className="course-progress">
               <span>Прогресс</span>
 
@@ -377,7 +379,7 @@ export default function CoursePage({ courseId, user }: { courseId: number; user:
                 </div>
               </div>
             ))}
-          </aside>
+          </CourseNavigation>
 
           <article className="lesson-panel">
             {currentPage ? (

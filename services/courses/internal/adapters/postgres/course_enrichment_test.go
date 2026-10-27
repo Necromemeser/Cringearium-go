@@ -245,3 +245,52 @@ func TestCourseEnrichmentUpgradeAndRollbackPreserveExistingAttempts(t *testing.T
 		check()
 	}
 }
+
+func TestMemologyLessonsRemoveOutboundFootnotesButKeepImages(t *testing.T) {
+	conn := testsupport.Postgres(t)
+	db := &DB{conn: conn, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	var pages []struct {
+		Content  string
+		Original string
+	}
+	if err := conn.Select(&pages, `SELECT p.content,b.content AS original FROM memology_v11_original_pages b JOIN course_pages p ON p.id=b.page_id`); err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 12 {
+		t.Fatal("missing paired lessons", len(pages))
+	}
+	images, changed := 0, 0
+	for _, p := range pages {
+		if strings.Contains(p.Content, "](http") {
+			t.Fatal("outbound learner link remains", p.Content)
+		}
+		if !strings.Contains(p.Content, "Самопроверка") {
+			t.Fatal("lesson lost learning material")
+		}
+		if p.Content != p.Original {
+			changed++
+		}
+		before, after := strings.Count(p.Original, "](/images/memes/"), strings.Count(p.Content, "](/images/memes/")
+		if before != after {
+			t.Fatal("original illustration lost")
+		}
+		images += after
+	}
+	if images != 10 || changed != 10 {
+		t.Fatal("unexpected cleanup scope", images, changed)
+	}
+	down, err := migrationFiles.ReadFile("migrations/000011_memology_safe_lessons.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(string(down)); err != nil {
+		t.Fatal(err)
+	}
+	var restored int
+	if err := conn.Get(&restored, `SELECT count(*) FROM course_pages p JOIN course_sections s ON s.id=p.section_id JOIN courses c ON c.id=s.course_id WHERE c.title IN('Мемология: история и теория мемов','Мемология с ИИ: история и теория мемов') AND p.content LIKE '%](http%'`); err != nil || restored != 10 {
+		t.Fatal("rollback lost original paragraphs", restored, err)
+	}
+}
