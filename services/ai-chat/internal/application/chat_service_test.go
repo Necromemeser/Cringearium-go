@@ -22,7 +22,7 @@ type repositoryMock struct {
 	usageErr     error
 }
 
-func (m *repositoryMock) CreateConversation(context.Context, domain.Conversation) (domain.Conversation, error) {
+func (m *repositoryMock) CreateOrReuseEmptyConversation(context.Context, domain.Conversation) (domain.Conversation, error) {
 	return m.conversation, nil
 }
 
@@ -180,7 +180,6 @@ func TestStreamResponseRejectsEmptyMessage(t *testing.T) {
 	}
 }
 
-
 func TestStreamResponseGeneratesTitleForFirstMessage(t *testing.T) {
 	userID := int64(42)
 	repo := &repositoryMock{
@@ -256,4 +255,3 @@ func TestStreamResponseRejectsTooLongMessage(t *testing.T) {
 		t.Fatalf("saved messages = %d, want 0", len(repo.saved))
 	}
 }
-

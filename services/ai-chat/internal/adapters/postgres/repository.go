@@ -12,15 +12,33 @@ import (
 type Repository struct{ db *DB }
 func NewRepository(db *DB) *Repository { return &Repository{db: db} }
 
-func (r *Repository) CreateConversation(ctx context.Context, conversation domain.Conversation) (domain.Conversation, error) {
+func (r *Repository) CreateOrReuseEmptyConversation(ctx context.Context, conversation domain.Conversation) (domain.Conversation, error) {
+	tx, err := r.db.conn.BeginTxx(ctx, nil)
+	if err != nil {
+		return domain.Conversation{}, err
+	}
+	defer tx.Rollback()
+	// Serialize draft creation for this owner, including requests from other tabs/instances.
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('chat-draft:'||$1::bigint::text,0))`, conversation.UserID); err != nil {
+		return domain.Conversation{}, err
+	}
 	var result domain.Conversation
-	err := r.db.conn.QueryRowxContext(ctx, `
-		INSERT INTO conversations (user_id, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, user_id AS userid, name, created_at AS createdat, updated_at AS updatedat
-	`, conversation.UserID, conversation.Name, conversation.CreatedAt, conversation.UpdatedAt).StructScan(&result)
-	return result, err
+	err = tx.QueryRowxContext(ctx, `SELECT c.id,c.user_id AS userid,c.name,c.created_at AS createdat,c.updated_at AS updatedat
+ FROM conversations c WHERE c.user_id=$1 AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=c.id)
+ ORDER BY c.updated_at DESC,c.id DESC LIMIT 1 FOR UPDATE OF c`, conversation.UserID).StructScan(&result)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = tx.QueryRowxContext(ctx, `INSERT INTO conversations(user_id,name,created_at,updated_at) VALUES($1,$2,$3,$4)
+  RETURNING id,user_id AS userid,name,created_at AS createdat,updated_at AS updatedat`, conversation.UserID, conversation.Name, conversation.CreatedAt, conversation.UpdatedAt).StructScan(&result)
+	}
+	if err != nil {
+		return domain.Conversation{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Conversation{}, err
+	}
+	return result, nil
 }
+
 func (r *Repository) GetConversation(ctx context.Context, id, userID int64) (domain.Conversation, error) {
 	var result domain.Conversation
 	err := r.db.conn.QueryRowxContext(ctx, `

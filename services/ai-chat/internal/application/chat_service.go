@@ -36,7 +36,7 @@ func (s *ChatService) CreateConversation(ctx context.Context, userID int64, name
 		name = "Новый чат"
 	}
 	now := time.Now()
-	return s.repository.CreateConversation(ctx, domain.Conversation{
+	return s.repository.CreateOrReuseEmptyConversation(ctx, domain.Conversation{
 		UserID:    userID,
 		Name:      name,
 		CreatedAt: now,

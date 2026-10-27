@@ -17,7 +17,7 @@ type handlerRepositoryMock struct {
 	conversation domain.Conversation
 }
 
-func (m *handlerRepositoryMock) CreateConversation(context.Context, domain.Conversation) (domain.Conversation, error) {
+func (m *handlerRepositoryMock) CreateOrReuseEmptyConversation(context.Context, domain.Conversation) (domain.Conversation, error) {
 	return m.conversation, nil
 }
 func (m *handlerRepositoryMock) GetConversation(_ context.Context, id, userID int64) (domain.Conversation, error) {

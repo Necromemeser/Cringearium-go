@@ -11,6 +11,10 @@ export default function ChatPage() {
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [loadedChat, setLoadedChat] = useState<number | null>(null)
+  const creatingRef = useRef(false)
   const [error, setError] = useState('')
   const messagesRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
@@ -23,11 +27,11 @@ export default function ChatPage() {
     }
 
     listChats()
-      .then(async (items) => {
+      .then((items) => {
         setChats(items)
         if (items.length > 0) {
           setActiveChat(items[0].id)
-          setMessages(await getChatMessages(items[0].id))
+
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить чаты'))
@@ -35,10 +39,16 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
-    if (activeChat === null) return
+    let cancelled = false
+    setLoadedChat(null)
+    setMessages([])
+    if (activeChat === null) { setMessagesLoading(false); return }
+    setMessagesLoading(true)
     getChatMessages(activeChat)
-      .then(setMessages)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Не удалось загрузить сообщения'))
+      .then(items => { if (!cancelled) { setMessages(items); setLoadedChat(activeChat) } })
+      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить сообщения') })
+      .finally(() => { if (!cancelled) setMessagesLoading(false) })
+    return () => { cancelled = true }
   }, [activeChat])
 
   function handleMessagesScroll() {
@@ -57,19 +67,23 @@ export default function ChatPage() {
   }, [messages])
 
   async function handleCreateChat() {
+    if (creatingRef.current || sending || loading || messagesLoading) return
+    if (activeChat !== null && loadedChat === activeChat && messages.length === 0) return
+    creatingRef.current = true
+    setCreating(true)
     try {
       setError('')
       const chat = await createChat()
-      setChats((items) => [chat, ...items])
+      setChats((items) => [chat, ...items.filter(item => item.id !== chat.id)])
       setActiveChat(chat.id)
       setMessages([])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось создать чат')
-    }
+    } finally { creatingRef.current = false; setCreating(false) }
   }
 
   async function handleDeleteChat(chatId: number) {
-    if (sending) return
+    if (sending || creatingRef.current) return
 
     try {
       setError('')
@@ -82,7 +96,7 @@ export default function ChatPage() {
 
       const nextChat = remaining[0]
       setActiveChat(nextChat?.id ?? null)
-      setMessages(nextChat ? await getChatMessages(nextChat.id) : [])
+
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось удалить чат')
     }
@@ -90,11 +104,12 @@ export default function ChatPage() {
 
   async function handleSend() {
     const content = draft.trim()
-    if (!content || activeChat === null || sending) return
+    if (!content || activeChat === null || sending || creatingRef.current || messagesLoading) return
 
     setError('')
     setDraft('')
     setSending(true)
+    setLoadedChat(null)
 
     const temporaryId = Date.now()
     setMessages((items) => [...items, {
@@ -148,7 +163,7 @@ export default function ChatPage() {
   }
 
   function handleSelectChat(id: number) {
-    if (sending) return
+    if (sending || creatingRef.current) return
     setActiveChat(id)
   }
 
@@ -175,8 +190,8 @@ export default function ChatPage() {
 
         <div className="chat-layout">
           <aside className="chat-sidebar profile-card">
-            <button type="button" className="button button-primary chat-new" onClick={handleCreateChat} disabled={sending}>
-              + Новый чат
+            <button type="button" className="button button-primary chat-new" onClick={handleCreateChat} disabled={sending || creating || messagesLoading}>
+              {creating ? 'Создаём чат…' : '+ Новый чат'}
             </button>
             {chats.map((chat) => (
               <div key={chat.id} className={`chat-item-wrapper${activeChat === chat.id ? ' active' : ''}`}>
@@ -191,7 +206,7 @@ export default function ChatPage() {
                   type="button"
                   className="chat-delete"
                   onClick={() => void handleDeleteChat(chat.id)}
-                  disabled={sending}
+                  disabled={sending || creating || messagesLoading}
                   aria-label={`Удалить чат «${chat.chatName}»`}
                   title="Удалить чат"
                 >
@@ -216,7 +231,7 @@ export default function ChatPage() {
               <div className="empty-state">
                 <div className="empty-icon">💬</div>
                 <h3>Начните новый чат</h3>
-                <button type="button" className="button button-primary" onClick={handleCreateChat}>Создать чат</button>
+                <button type="button" className="button button-primary" onClick={handleCreateChat} disabled={creating}>Создать чат</button>
               </div>
             ) : (
               <>
@@ -246,9 +261,9 @@ export default function ChatPage() {
                     aria-label="Сообщение"
                     maxLength={32768}
                     rows={1}
-                    disabled={sending}
+                    disabled={sending || creating || messagesLoading}
                   />
-                  <button type="submit" className="chat-send" disabled={!draft.trim() || sending} aria-label="Отправить сообщение">
+                  <button type="submit" className="chat-send" disabled={!draft.trim() || sending || creating || messagesLoading} aria-label="Отправить сообщение">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M4.5 19.5 21 12 4.5 4.5 4 10l11 2-11 2 .5 5.5Z" />
                     </svg>
