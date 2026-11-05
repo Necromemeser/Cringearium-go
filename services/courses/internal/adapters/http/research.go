@@ -25,6 +25,7 @@ func (h *ResearchHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /internal/admin/research/studies", h.create)
 	mux.HandleFunc("POST /internal/admin/research/studies/{studyId}/participants", h.assign)
 	mux.HandleFunc("GET /internal/admin/research/studies/{studyId}/report", h.report)
+	mux.HandleFunc("GET /internal/admin/research/studies/{studyId}/exclusions", h.exclusions)
 	mux.HandleFunc("GET /internal/admin/research/studies/{studyId}/export", h.export)
 }
 func researchError(w http.ResponseWriter, err error) {
@@ -207,9 +208,9 @@ func (h *ResearchHandler) export(w http.ResponseWriter, r *http.Request) {
 	}
 	switch dataset {
 	case "participants":
-		emit("study_id", "participant_id", "assigned_arm", "course_id", "assigned_at_utc", "pre_assessment_id", "post_assessment_id", "pre_score", "post_score", "gain_pp", "pre_at_utc", "post_at_utc", "eligible", "quality_flags", "completed_pages", "total_pages", "ai_sessions", "ai_answers", "ai_correct", "include_unversioned", "exported_at_utc")
+		emit("study_id", "participant_id", "assigned_arm", "course_id", "assigned_at_utc", "pre_assessment_id", "post_assessment_id", "pre_score", "post_score", "gain_pp", "pre_at_utc", "post_at_utc", "eligible", "quality_flags", "completed_pages", "total_pages", "ai_sessions", "ai_answers", "ai_correct", "include_unversioned", "exported_at_utc", "pre_attempts", "post_attempts", "progress_percent", "calendar_days", "ai_window_answers")
 		for _, p := range report.Participants {
-			emit(id, p.ParticipantID, p.Arm, p.CourseID, p.AssignedAt, p.PreID, p.PostID, p.PreScore, p.PostScore, p.Gain, p.PreAt, p.PostAt, p.Eligible, strings.Join(p.Flags, ";"), p.CompletedPages, p.TotalPages, p.AISessions, p.AIAnswers, p.AICorrect, report.IncludeUnversioned, now)
+			emit(id, p.ParticipantID, p.Arm, p.CourseID, p.AssignedAt, p.PreID, p.PostID, p.PreScore, p.PostScore, p.Gain, p.PreAt, p.PostAt, p.Eligible, strings.Join(p.Flags, ";"), p.CompletedPages, p.TotalPages, p.AISessions, p.AIAnswers, p.AICorrect, report.IncludeUnversioned, now, p.PreAttempts, p.PostAttempts, p.ProgressPercent, p.CalendarDays, p.AIWindowAnswers)
 		}
 	case "assessments":
 		emit("study_id", "participant_id", "assigned_arm", "observed_course_id", "assessment_id", "type", "scope", "score", "completed_at_utc", "form_hash", "answers_json", "instrument_snapshot_json", "exported_at_utc")
@@ -258,6 +259,25 @@ func (h *ResearchHandler) export(w http.ResponseWriter, r *http.Request) {
 				emit(id, "summary", group.Arm, name+"_sd", stat.N, stat.SD, nil, nil, "sample_sd", report.IncludeUnversioned, now)
 				emit(id, "summary", group.Arm, name+"_median", stat.N, stat.Median, nil, nil, "median", report.IncludeUnversioned, now)
 			}
+
+			e := group.Engagement
+			for _, metric := range []struct {
+				name string
+				stat domain.SummaryStats
+			}{
+				{"progress_percent", e.Progress}, {"calendar_days", e.CalendarDays}, {"ai_sessions", e.AISessions}, {"ai_answers", e.AIAnswers}, {"pre_attempts", e.PreAttempts}, {"post_attempts", e.PostAttempts},
+			} {
+				emit(id, "summary", group.Arm, metric.name, metric.stat.N, metric.stat.Mean, metric.stat.CILow, metric.stat.CIHigh, "mean_t95", report.IncludeUnversioned, now)
+				emit(id, "summary", group.Arm, metric.name+"_median", metric.stat.N, metric.stat.Median, nil, nil, "median", report.IncludeUnversioned, now)
+			}
+			for _, metric := range []struct {
+				name  string
+				value int
+			}{{"improved", e.Improved}, {"unchanged", e.Unchanged}, {"declined", e.Declined}} {
+				emit(id, "count", group.Arm, metric.name, group.Paired, metric.value, nil, nil, "complete_pairs", report.IncludeUnversioned, now)
+			}
+			emit(id, "rate", group.Arm, "improvement_percent", group.Paired, e.ImprovementRate, nil, nil, "improved_over_complete_pairs", report.IncludeUnversioned, now)
+			emit(id, "rate", group.Arm, "ai_correct_percent", e.AITotalAnswers, e.AIAccuracy, nil, nil, "correct_over_observed_ai_answers", report.IncludeUnversioned, now)
 		}
 		c := report.Comparison
 		emit(id, "comparison", "adaptive-control", "gain_difference_pp", report.Groups[0].Paired+report.Groups[1].Paired, c.GainDifference, c.CILow, c.CIHigh, "Welch_t95", report.IncludeUnversioned, now)
@@ -273,4 +293,18 @@ func (h *ResearchHandler) export(w http.ResponseWriter, r *http.Request) {
 		emit("study_id", "title", "design", "scope", "control_course_id", "adaptive_course_id", "expected_pre_hash", "expected_post_hash", "theory_content_hash", "protocol_notes", "pairing_policy", "analysis_population", "missing_values", "include_unversioned", "ai_source_available", "exported_at_utc")
 		emit(id, data.Study.Title, data.Study.Design, data.Study.Scope, data.Study.ControlCourseID, data.Study.AdaptiveCourseID, data.Study.PreHash, data.Study.PostHash, data.Study.ContentHash, data.Study.ProtocolNotes, "first_pre_then_first_post_by_time_and_id", "complete_pairs_in_assigned_groups", "empty_not_zero", report.IncludeUnversioned, data.AIAvailable, now)
 	}
+}
+
+func (h *ResearchHandler) exclusions(w http.ResponseWriter, r *http.Request) {
+	id, err := studyID(r)
+	if err != nil {
+		researchError(w, err)
+		return
+	}
+	items, err := h.service.Exclusions(r.Context(), id)
+	if err != nil {
+		researchError(w, err)
+		return
+	}
+	writeJSON(w, 200, items)
 }

@@ -23,6 +23,11 @@ type ResearchStudy struct {
 	ExportSalt       string    `json:"-" db:"export_salt"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 }
+type ResearchExclusion struct {
+	UserID int64  `json:"user_id" db:"user_id"`
+	Reason string `json:"reason" db:"reason"`
+}
+
 type ResearchMember struct {
 	UserID         int64
 	Arm            string
@@ -68,25 +73,30 @@ type ResearchDataset struct {
 	Warnings    []string
 }
 type ResearchParticipant struct {
-	ParticipantID  string     `json:"participant_id"`
-	UserID         int64      `json:"account_id"`
-	Arm            string     `json:"arm"`
-	CourseID       int64      `json:"course_id"`
-	AssignedAt     time.Time  `json:"assigned_at"`
-	PreScore       *float64   `json:"pre_score"`
-	PostScore      *float64   `json:"post_score"`
-	Gain           *float64   `json:"gain"`
-	PreID          *int64     `json:"pre_id"`
-	PostID         *int64     `json:"post_id"`
-	PreAt          *time.Time `json:"pre_at"`
-	PostAt         *time.Time `json:"post_at"`
-	Eligible       bool       `json:"eligible"`
-	Flags          []string   `json:"flags"`
-	CompletedPages int        `json:"completed_pages"`
-	TotalPages     int        `json:"total_pages"`
-	AISessions     *int       `json:"ai_sessions"`
-	AIAnswers      *int       `json:"ai_answers"`
-	AICorrect      *int       `json:"ai_correct"`
+	AIWindowAnswers *int       `json:"ai_window_answers"`
+	PreAttempts     int        `json:"pre_attempts"`
+	PostAttempts    int        `json:"post_attempts"`
+	ProgressPercent *float64   `json:"progress_percent"`
+	CalendarDays    *float64   `json:"calendar_days"`
+	ParticipantID   string     `json:"participant_id"`
+	UserID          int64      `json:"account_id"`
+	Arm             string     `json:"arm"`
+	CourseID        int64      `json:"course_id"`
+	AssignedAt      time.Time  `json:"assigned_at"`
+	PreScore        *float64   `json:"pre_score"`
+	PostScore       *float64   `json:"post_score"`
+	Gain            *float64   `json:"gain"`
+	PreID           *int64     `json:"pre_id"`
+	PostID          *int64     `json:"post_id"`
+	PreAt           *time.Time `json:"pre_at"`
+	PostAt          *time.Time `json:"post_at"`
+	Eligible        bool       `json:"eligible"`
+	Flags           []string   `json:"flags"`
+	CompletedPages  int        `json:"completed_pages"`
+	TotalPages      int        `json:"total_pages"`
+	AISessions      *int       `json:"ai_sessions"`
+	AIAnswers       *int       `json:"ai_answers"`
+	AICorrect       *int       `json:"ai_correct"`
 }
 type ResearchReport struct {
 	Study              ResearchStudy          `json:"study"`
@@ -148,6 +158,10 @@ func BuildResearchReport(data ResearchDataset, includeUnversioned bool, now time
 			} else if attempt.Type == "posttest" {
 				posts = append(posts, attempt)
 			}
+		}
+		row.PreAttempts, row.PostAttempts = len(pres), len(posts)
+		if row.TotalPages > 0 {
+			row.ProgressPercent = fptr(100 * float64(row.CompletedPages) / float64(row.TotalPages))
 		}
 		if len(pres) > 1 {
 			row.Flags = append(row.Flags, "multiple_pretests")
@@ -213,9 +227,12 @@ func BuildResearchReport(data ResearchDataset, includeUnversioned bool, now time
 			row.Gain = &gain
 		}
 		row.Eligible = valid && row.Gain != nil
+		if row.Eligible {
+			row.CalendarDays = fptr(row.PostAt.Sub(*row.PreAt).Hours() / 24)
+		}
 		if data.AIAvailable {
 			sessions := map[string]bool{}
-			answers, correct := 0, 0
+			answers, correct, windowAnswers := 0, 0, 0
 			for _, event := range data.AIEvents {
 				if event.UserID != member.UserID {
 					continue
@@ -232,6 +249,9 @@ func BuildResearchReport(data ResearchDataset, includeUnversioned bool, now time
 				sessions[event.SessionID] = true
 				if event.IsCorrect != nil {
 					answers++
+					if row.Eligible && event.AnsweredAt != nil && !event.AnsweredAt.Before(*row.PreAt) && !event.AnsweredAt.After(*row.PostAt) {
+						windowAnswers++
+					}
 					if *event.IsCorrect {
 						correct++
 					}
@@ -241,6 +261,9 @@ func BuildResearchReport(data ResearchDataset, includeUnversioned bool, now time
 			row.AISessions = &n
 			row.AIAnswers = &answers
 			row.AICorrect = &correct
+			if row.Eligible {
+				row.AIWindowAnswers = &windowAnswers
+			}
 		}
 		for _, flag := range row.Flags {
 			report.QualityCounts[flag]++

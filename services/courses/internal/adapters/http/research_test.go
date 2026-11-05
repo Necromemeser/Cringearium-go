@@ -72,6 +72,27 @@ func TestResearchCSVIsMachineReadableScopedAndFormulaSafe(t *testing.T) {
 	if participants[1][6] != "" || participants[1][8] != "" || participants[1][9] != "" {
 		t.Fatal("missing result became zero", participants)
 	}
+
+	columnsParticipant := map[string]int{}
+	for i, name := range participants[0] {
+		columnsParticipant[name] = i
+	}
+	if participants[1][columnsParticipant["pre_attempts"]] != "1" || participants[1][columnsParticipant["post_attempts"]] != "0" || participants[1][columnsParticipant["calendar_days"]] != "" || participants[1][columnsParticipant["ai_window_answers"]] != "" {
+		t.Fatal("new CSV metrics lose counts or missingness", participants)
+	}
+	metrics := parse(download("metrics"))
+	foundAttempts, foundUnavailableAI := false, false
+	for _, row := range metrics[1:] {
+		if row[2] == "control" && row[3] == "pre_attempts" {
+			foundAttempts = row[4] == "1" && row[5] == "1"
+		}
+		if row[2] == "control" && row[3] == "ai_answers" {
+			foundUnavailableAI = row[4] == "0" && row[5] == ""
+		}
+	}
+	if !foundAttempts || !foundUnavailableAI {
+		t.Fatal("CSV metrics are inconsistent with report", metrics)
+	}
 	key := parse(download("mapping"))
 	if key[1][2] != "90909090" || key[1][1] != rows[1][columns["participant_id"]] {
 		t.Fatal("explicit mapping is inconsistent", key)

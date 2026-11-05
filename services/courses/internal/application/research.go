@@ -140,3 +140,11 @@ func (s *Research) Report(ctx context.Context, id int64, includeUnversioned bool
 }
 
 var _ ports.ResearchUseCases = (*Research)(nil)
+
+func (s *Research) Exclusions(ctx context.Context, id int64) ([]domain.ResearchExclusion, error) {
+	study, err := s.repo.GetResearchStudy(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.ResearchExclusions(ctx, study)
+}

@@ -18,7 +18,7 @@ execFileSync(process.execPath, [require.resolve('typescript/bin/tsc'),
 const Markdown = require(path.join(output, 'components/markdown/Markdown.js')).default
 const Results = require(path.join(output, 'components/tests/AdaptiveResults.js')).default
 const { CourseCompletionContent } = require(path.join(output, 'pages/CourseCompletionPage.js'))
-const { GainChart, ScoreScatter, ParticipationChart } = require(path.join(output, 'components/admin/ResearchCharts.js'))
+const { GainChart, ScoreScatter, ParticipationChart, GainDistribution, MeanTrajectory, PracticeScatter } = require(path.join(output, 'components/admin/ResearchCharts.js'))
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props))
 let count = 0
 function test(name, body) { body(); count++; console.log(`PASS ${name}`) }
@@ -89,5 +89,23 @@ test('research plots retain legitimate zero scores, negative change and full den
   assert.match(participation, /Назначено/)
   assert.match(participation, />10<\/strong>/)
   assert.match(participation, />4<\/strong>/)
+})
+test('additional research plots retain boundary gains, matched populations and observed zero exposure', () => {
+  const rows = [
+    { participant_id: 'low', arm: 'control', eligible: true, gain: -100, ai_window_answers: null },
+    { participant_id: 'zero', arm: 'adaptive', eligible: true, gain: 0, ai_window_answers: 0 },
+    { participant_id: 'high', arm: 'adaptive', eligible: true, gain: 100, ai_window_answers: 10 },
+    { participant_id: 'missing', arm: 'adaptive', eligible: true, gain: 20, ai_window_answers: null },
+    { participant_id: 'excluded', arm: 'adaptive', eligible: false, gain: 40, ai_window_answers: 10 },
+  ]
+  const histogram = render(GainDistribution, { participants: rows })
+  assert.match(histogram, /от -100 до -80.*участников: 1/)
+  assert.match(histogram, /от 80 до 100 включительно.*участников: 1/)
+  const scatter = render(PracticeScatter, { participants: rows })
+  assert.equal((scatter.match(/<circle/g) ?? []).length, 2)
+  assert.match(scatter, /zero: ответов 0/)
+  assert.doesNotMatch(scatter, /missing:|excluded:/)
+  assert.match(render(MeanTrajectory, { groups: [] }), /нужны полные сопоставимые пары/)
+  assert.match(render(PracticeScatter, { participants: [] }), /доступные счётчики/)
 })
 console.log(`${count} learner UI checks passed`)

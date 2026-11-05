@@ -42,3 +42,44 @@ export function ParticipationChart({ groups }: { groups: ResearchGroup[] }) {
   const max = Math.max(1, ...groups.map(group => group.assigned))
   return <div className="research-funnel">{groups.map(group => <div key={group.arm}><h4>{armLabel(group.arm)}</h4>{[['Назначено', group.assigned], ['Есть входной', group.with_pre], ['Есть итоговый', group.with_post], ['Полные сопоставимые пары', group.paired]].map(([label, value]) => <div className="research-funnel-row" key={label}><span>{label}</span><div className="research-funnel-track"><div style={{ width: `${Number(value) / max * 100}%`, background: color(group.arm) }} /></div><strong>{value}</strong></div>)}</div>)}</div>
 }
+
+export function GainDistribution({ participants }: { participants: ResearchParticipant[] }) {
+  const rows = participants.filter(row => row.eligible && row.gain != null)
+  if (!rows.length) return <p className="research-empty">Для распределения нужны полные сопоставимые пары.</p>
+  const arms = ['control', 'adaptive']
+  const bins = arms.map(arm => Array.from({ length: 10 }, (_, index) => rows.filter(row => row.arm === arm && row.gain! >= -100 + index * 20 && (index === 9 ? row.gain! <= 100 : row.gain! < -80 + index * 20)).length))
+  const max = Math.max(1, ...bins.flat())
+  return <svg viewBox="0 0 600 300" role="img" aria-label="Распределение прироста по группам с интервалами 20 процентных пунктов">
+    {arms.map((arm, a) => <text key={arm} x={55 + a * 245} y="22" fontSize="12">{armLabel(arm)} · n={rows.filter(row => row.arm === arm).length}</text>)}
+    {bins.map((counts, a) => counts.map((n, i) => <rect key={`${a}-${i}`} x={55 + i * 49 + a * 21} y={240 - n / max * 180} width="19" height={n / max * 180} fill={color(arms[a])}><title>{`${armLabel(arms[a])}: от ${-100 + i * 20} до ${-80 + i * 20}${i === 9 ? ' включительно' : ' (не включая верхнюю границу)'} п. п.; участников: ${n}`}</title></rect>))}
+    <line x1="52" x2="548" y1="240" y2="240" stroke="#94a3b8" />
+    {[0, 2.5, 5, 7.5, 10].map(tick => <text key={tick} x={55 + tick * 49} y="260" fontSize="11" textAnchor="middle">{-100 + tick * 20}</text>)}
+    <text x="45" y="60" textAnchor="end" fontSize="11">{max}</text><text x="45" y="244" textAnchor="end" fontSize="11">0</text>
+    <text x="175" y="286" fontSize="12">Прирост, п. п. · высота: число участников</text>
+  </svg>
+}
+
+export function MeanTrajectory({ groups }: { groups: ResearchGroup[] }) {
+  const available = groups.filter(group => group.paired > 0 && group.pre.mean != null && group.post.mean != null)
+  if (!available.length) return <p className="research-empty">Для сравнения средних нужны полные сопоставимые пары.</p>
+  const y = (value: number) => 235 - value * 1.8
+  return <svg viewBox="0 0 600 300" role="img" aria-label="Входной и итоговый средний балл на одной выборке полных пар">
+    {[0, 25, 50, 75, 100].map(tick => <g key={tick}><line x1="70" x2="540" y1={y(tick)} y2={y(tick)} stroke="#e5eaf2" /><text x="55" y={y(tick) + 4} fontSize="11" textAnchor="end">{tick}%</text></g>)}
+    {available.map((group, i) => <g key={group.arm}><text x={70 + i * 240} y="22" fontSize="12">{armLabel(group.arm)} · n={group.paired}</text><line x1="145" x2="465" y1={y(group.pre.mean!)} y2={y(group.post.mean!)} stroke={color(group.arm)} strokeWidth="3" />{[group.pre.mean!, group.post.mean!].map((value, index) => <circle key={index} cx={145 + index * 320} cy={y(value)} r="6" fill={color(group.arm)}><title>{`${armLabel(group.arm)}: ${index ? 'итоговый' : 'входной'} средний ${number(value)}%; одни и те же ${group.paired} участников`}</title></circle>)}</g>)}
+    <text x="145" y="263" fontSize="12" textAnchor="middle">Входной</text><text x="465" y="263" fontSize="12" textAnchor="middle">Итоговый</text><text x="125" y="287" fontSize="11">Средние по одинаковым участникам, а не индивидуальные траектории</text>
+  </svg>
+}
+
+export function PracticeScatter({ participants }: { participants: ResearchParticipant[] }) {
+  const rows = participants.filter(row => row.arm === 'adaptive' && row.eligible && row.gain != null && row.ai_window_answers != null)
+  if (!rows.length) return <p className="research-empty">Нужны сопоставимые пары ИИ-группы и доступные счётчики ответов.</p>
+  const max = Math.max(1, ...rows.map(row => row.ai_window_answers!))
+  const x = (value: number) => 70 + value / max * 460
+  const y = (value: number) => 145 - value
+  return <svg viewBox="0 0 600 300" role="img" aria-label="Число ответов в ИИ-практике и прирост балла каждого участника">
+    <text x="70" y="22" fontSize="12">ИИ-практика · сопоставимых пар: {rows.length}</text>
+    {[-100, -50, 0, 50, 100].map(tick => <g key={tick}><line x1="70" x2="530" y1={y(tick)} y2={y(tick)} stroke={tick === 0 ? '#9aa8bc' : '#edf0f4'} /><text x="55" y={y(tick) + 4} fontSize="11" textAnchor="end">{tick}</text></g>)}
+    {rows.map(row => <circle key={row.participant_id} cx={x(row.ai_window_answers!)} cy={y(row.gain!)} r="5" fill={color('adaptive')} opacity=".65"><title>{`${row.participant_id}: ответов ${row.ai_window_answers}, прирост ${number(row.gain)} п. п.`}</title></circle>)}
+    <text x="70" y="263" fontSize="11">0</text><text x="530" y="263" fontSize="11" textAnchor="end">{max}</text><text x="175" y="287" fontSize="12">Ответов между входным и итоговым тестом</text><text x="15" y="180" transform="rotate(-90 15 180)" fontSize="12">Прирост, п. п.</text>
+  </svg>
+}

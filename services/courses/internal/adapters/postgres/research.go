@@ -187,3 +187,17 @@ func (db *DB) ResearchAIPageCount(ctx context.Context, courseID int64) (int, err
 	err := db.conn.GetContext(ctx, &count, `SELECT count(*) FROM course_pages p JOIN course_sections s ON s.id=p.section_id WHERE s.course_id=$1 AND p.type='ai_test'`, courseID)
 	return count, err
 }
+
+func (db *DB) ResearchExclusions(ctx context.Context, study domain.ResearchStudy) ([]domain.ResearchExclusion, error) {
+	result := []domain.ResearchExclusion{}
+	err := db.conn.SelectContext(ctx, &result, `WITH candidates AS (
+ SELECT user_id, 'already_assigned'::text AS reason, 1 AS priority FROM research_participants WHERE study_id=$1
+ UNION ALL
+ SELECT user_id,'prior_course_access',2 FROM course_access WHERE $2='randomized' AND course_id=ANY($3::bigint[])
+ UNION ALL
+ SELECT user_id,'prior_learning',3 FROM assessment_results WHERE $2='randomized' AND course_id=ANY($3::bigint[])
+ UNION ALL
+ SELECT pp.user_id,'prior_learning',3 FROM page_progress pp JOIN course_pages p ON p.id=pp.page_id JOIN course_sections s ON s.id=p.section_id WHERE $2='randomized' AND s.course_id=ANY($3::bigint[])
+ ) SELECT DISTINCT ON(user_id) user_id,reason FROM candidates ORDER BY user_id,priority`, study.ID, study.Design, []int64{study.ControlCourseID, study.AdaptiveCourseID})
+	return result, err
+}
