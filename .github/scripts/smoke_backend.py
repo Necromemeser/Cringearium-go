@@ -1,12 +1,14 @@
 """Exercise course submission against the disposable CI Compose stack (no LLM calls)."""
 import json
+import os
 import subprocess
 import time
 import urllib.error
 import urllib.request
 import uuid
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = os.environ.get("SMOKE_BASE_URL", "http://localhost:8080")
+POSTGRES_CONTAINER = os.environ.get("SMOKE_POSTGRES_CONTAINER", "cringearium-postgres")
 
 
 def request(method, path, body=None, token=None, expected=200):
@@ -27,7 +29,7 @@ def request(method, path, body=None, token=None, expected=200):
 
 def sql(query):
     result = subprocess.run(
-        ["docker", "exec", "-i", "cringearium-postgres", "sh", "-c",
+        ["docker", "exec", "-i", POSTGRES_CONTAINER, "sh", "-c",
          'exec psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d cringearium_courses'],
         input=query, text=True, capture_output=True, check=True,
     )

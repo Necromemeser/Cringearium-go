@@ -11,12 +11,12 @@ import urllib.request
 import uuid
 
 sys.dont_write_bytecode = True
-from smoke_backend import request, sql, BASE_URL
+from smoke_backend import request, sql, BASE_URL, POSTGRES_CONTAINER
 
 
 def auth_sql(query):
     return subprocess.run([
-        'docker', 'exec', '-i', 'cringearium-postgres', 'sh', '-c',
+        'docker', 'exec', '-i', POSTGRES_CONTAINER, 'sh', '-c',
         'exec psql -X -qAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d cringearium_auth',
     ], input=query, text=True, capture_output=True, check=True).stdout.strip()
 

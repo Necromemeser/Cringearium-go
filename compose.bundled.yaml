@@ -1,0 +1,45 @@
+name: cringearium-bundled
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: cringearium-bundled-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cringearium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - bundled_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+
+  app:
+    image: cringearium-bundled:local
+    build: {context: ., dockerfile: Dockerfile}
+    container_name: cringearium-bundled-app
+    restart: unless-stopped
+    stop_grace_period: 60s
+    ports:
+      - "${APP_PORT:-3000}:80"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-cringearium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      JWT_TTL: ${JWT_TTL:-24h}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      LLM_BASE_URL: ${LLM_BASE_URL:?Set LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY:?Set LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:?Set LLM_MODEL}
+    depends_on:
+      postgres: {condition: service_healthy}
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+
+volumes:
+  bundled_postgres_data:

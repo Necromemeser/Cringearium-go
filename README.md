@@ -127,3 +127,15 @@ docker compose logs -f
 ```bash
 docker compose down
 ```
+
+### Два контейнера: приложение и PostgreSQL
+
+Корневой [Dockerfile](Dockerfile) объединяет frontend и backend в один образ.
+Для запуска вместе с отдельным PostgreSQL:
+
+```bash
+docker compose -f compose.bundled.yaml up --build -d
+```
+
+Параметры окружения, настройка контейнерной платформы и перенос данных описаны
+в [инструкции развёртывания](docs/bundled-deployment.md).
