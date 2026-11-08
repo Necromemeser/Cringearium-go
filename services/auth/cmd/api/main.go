@@ -45,6 +45,10 @@ func main() {
 
 	userRepository := postgres.NewUserRepository(db)
 	passwordHasher := bcrypt.NewHasher(bcryptCost)
+	if err := application.BootstrapAdministrator(context.Background(), userRepository, passwordHasher, cfg.AdminPassword); err != nil {
+		logger.Error("administrator configuration failed", "error", err)
+		os.Exit(1)
+	}
 	tokenService := jwt.NewTokenService(cfg.JWTSecret, cfg.JWTTTL)
 	auth := application.NewAuth(userRepository, passwordHasher, tokenService)
 

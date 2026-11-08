@@ -24,6 +24,9 @@ func TestStudentSeedsLoginAndConflictSafeRollback(t *testing.T) {
 	}
 	repo := NewUserRepository(db)
 	ctx := context.Background()
+	if err := application.BootstrapAdministrator(ctx, repo, password.NewHasher(12), "administrator-for-seed-tests"); err != nil {
+		t.Fatal(err)
+	}
 	users, err := repo.FindAll(ctx)
 	if err != nil {
 		t.Fatal(err)
