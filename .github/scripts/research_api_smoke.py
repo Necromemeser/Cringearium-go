@@ -51,7 +51,12 @@ def main():
                         'protocol_notes': 'Synthetic integration fixtures, removed after verification.'}, admin, 201)
         study_id = int(study['id'])
         root = path + '/' + str(study_id)
+        request('GET', root + '/exclusions', token=learner1['token'], expected=403)
+        excluded = request('GET', root + '/exclusions', token=admin)
+        assert not any(row['user_id'] in accounts[1:] for row in excluded)
         request('POST', root + '/participants', {'user_ids': accounts[1:]}, admin)
+        excluded = request('GET', root + '/exclusions', token=admin)
+        assert all(any(row['user_id'] == uid and row['reason'] == 'already_assigned' for row in excluded) for uid in accounts[1:])
         report = request('GET', root + '/report', token=admin)
         assert [g['assigned'] for g in report['groups']] == [1, 1]
         assert all(p['pre_score'] is None and p['gain'] is None for p in report['participants'])
@@ -97,6 +102,7 @@ def main():
                 if dataset == 'participants':
                     assert len(rows) == 2 and all(r['pre_score'] == '0' and r['gain_pp'] == '50' for r in rows)
                     assert 'account_id' not in rows[0] and 'email' not in rows[0]
+                    assert all(r['pre_attempts'] == '1' and r['post_attempts'] == '1' and float(r['calendar_days']) >= 0 and r['ai_window_answers'] == '0' for r in rows)
                 if dataset == 'assessments':
                     assert len(rows) == 4 and all(len(r['form_hash']) == 64 for r in rows)
                 if dataset == 'answers':

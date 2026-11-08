@@ -30,16 +30,19 @@ def fixture():
         adaptive = i >= 8
         pre = 10 + (i % 8) * 10
         post = 15 + .6 * pre + 12 * adaptive + noise[i]
-        participants.append({'participant_id': f'synthetic-{i:03d}', 'account_id': i + 1, 'arm': 'adaptive' if adaptive else 'control', 'course_id': 1 if adaptive else 2, 'assigned_at': NOW, 'pre_score': pre, 'post_score': post, 'gain': post - pre, 'pre_id': 2 * i + 1, 'post_id': 2 * i + 2, 'pre_at': NOW, 'post_at': NOW, 'eligible': True, 'flags': [], 'completed_pages': 10, 'total_pages': 10, 'ai_sessions': 2 if adaptive else 0, 'ai_answers': 20 if adaptive else 0, 'ai_correct': 15 if adaptive else 0})
+        participants.append({'participant_id': f'synthetic-{i:03d}', 'account_id': i + 1, 'arm': 'adaptive' if adaptive else 'control', 'course_id': 1 if adaptive else 2, 'assigned_at': NOW, 'pre_score': pre, 'post_score': post, 'gain': post - pre, 'pre_id': 2 * i + 1, 'post_id': 2 * i + 2, 'pre_at': NOW, 'post_at': NOW, 'eligible': True, 'flags': [], 'completed_pages': 10, 'total_pages': 10, 'ai_window_answers': 15 if adaptive else 0, 'pre_attempts': 1, 'post_attempts': 1, 'progress_percent': 100, 'calendar_days': 3, 'ai_sessions': 2 if adaptive else 0, 'ai_answers': 20 if adaptive else 0, 'ai_correct': 15 if adaptive else 0})
     groups = []
     for arm in ['control', 'adaptive']:
         rows = [p for p in participants if p['arm'] == arm]
         groups.append({'arm': arm, 'assigned': 8, 'with_pre': 8, 'with_post': 8, 'paired': 8, 'finished_course': 8, 'post_completion': 100, 'pre': summary([p['pre_score'] for p in rows]), 'post': summary([p['post_score'] for p in rows]), 'gain': summary([p['gain'] for p in rows])})
+    for group in groups:
+        rows = [p for p in participants if p['arm'] == group['arm']]
+        group['engagement'] = {'improved': sum(p['gain'] > 0 for p in rows), 'unchanged': sum(p['gain'] == 0 for p in rows), 'declined': sum(p['gain'] < 0 for p in rows), 'improvement_rate': 100 * sum(p['gain'] > 0 for p in rows) / len(rows), 'progress': summary([100] * len(rows)), 'calendar_days': summary([3] * len(rows)), 'ai_sessions': summary([p['ai_sessions'] for p in rows]), 'ai_answers': summary([p['ai_answers'] for p in rows]), 'pre_attempts': summary([1] * len(rows)), 'post_attempts': summary([1] * len(rows)), 'ai_total_answers': sum(p['ai_answers'] for p in rows), 'ai_accuracy': 75 if group['arm'] == 'adaptive' else None}
     return {'study': STUDY, 'generated_at': NOW, 'include_unversioned': False, 'participants': participants, 'groups': groups, 'comparison': {'gain_difference': groups[1]['gain']['mean'] - groups[0]['gain']['mean'], 'ci_low': -1.5, 'ci_high': 26.2, 'hedges_g': .9, 'completion_difference': 0}, 'model': {'available': True, 'reason': '', 'n': 16, 'df': 13, 'group_coefficient': 12.375, 'pre_coefficient': .595833333, 'intercept': 15.1875, 'se': 1.139343819, 'ci_low': 9.914, 'ci_high': 14.836, 'r2': .96}, 'warnings': ['observational_design', 'complete_cases_only', 'small_sample', 'active_time_not_measured'], 'ai_available': True, 'quality_counts': {}}
 
 
 def main():
-    state = {'studies': [STUDY], 'assigned': False, 'exports': [], 'calls': [], 'errors': []}
+    state = {'studies': [STUDY], 'assigned': False, 'eligibility_down': False, 'exports': [], 'calls': [], 'errors': []}
     courses = [{'id': i, 'title': 'Математика: курс с ИИ' if i == 1 else 'Математика: обычные тесты', 'theme': 'Математика', 'status': 'published', 'enrolled_users': 8, 'page_count': 10, 'section_count': 3, 'price': 0, 'description': ''} for i in [1, 2]]
     users = [{'id': i, 'username': f'test{i}', 'email': f'test{i}@example.test', 'role': 'student'} for i in range(1, 17)]
 
@@ -73,6 +76,11 @@ def main():
                 body = study
             else:
                 body = state['studies']
+        elif path.endswith('/exclusions'):
+            if state['eligibility_down']:
+                route.fulfill(status=503, body='Unavailable eligibility')
+                return
+            body = ([{'user_id': 16, 'reason': 'prior_course_access'}] + ([{'user_id': i, 'reason': 'already_assigned'} for i in [1, 2]] if state['assigned'] else [])) if path.split('/')[-2] == '2' else [{'user_id': i, 'reason': 'already_assigned'} for i in range(1,17)]
         elif path.endswith('/participants'):
             assert request.post_data_json['user_ids'] == [1, 2]
             state['assigned'] = True
@@ -114,6 +122,10 @@ def main():
         expect(page.get_by_role('img', name='Средний прирост баллов по группам с 95-процентным доверительным интервалом')).to_be_visible()
         expect(page.get_by_role('img', name='Входной и итоговый балл каждого участника: выше диагонали результат улучшился')).to_be_visible()
         expect(page.get_by_text('Часть оперативной статистики недоступна.', exact=False)).to_be_visible()
+        expect(page.get_by_role('heading', name='Прохождение и практика')).to_be_visible()
+        expect(page.get_by_role('img', name='Распределение прироста по группам с интервалами 20 процентных пунктов')).to_be_visible()
+        expect(page.get_by_role('img', name='Входной и итоговый средний балл на одной выборке полных пар')).to_be_visible()
+        expect(page.get_by_role('img', name='Число ответов в ИИ-практике и прирост балла каждого участника')).to_be_visible()
         page.get_by_label('Включить исторические результаты', exact=False).check()
         expect(page.get_by_text('Включены неверсионированные попытки.', exact=False)).to_be_visible()
         with page.expect_download() as info:
@@ -133,11 +145,35 @@ def main():
         page.get_by_label('Экспериментальная группа', exact=False).select_option('1')
         page.get_by_role('button', name='Сохранить протокол').click()
         expect(page.get_by_text('Протокол сохранён.', exact=False)).to_be_visible()
-        page.locator('.research-protocol').first.locator('summary').click()
-        page.get_by_label('ID аккаунтов участников').fill('1, 2')
+        expect(page.get_by_role('button', name='Добавить и выдать доступ')).to_be_disabled()
+        state['eligibility_down'] = True
+        page.get_by_role('button', name='Обновить отчёт').click()
+        expect(page.get_by_text('Не удалось проверить доступность участников.', exact=False)).to_be_visible()
+        expect(page.get_by_role('button', name='Добавить и выдать доступ')).to_be_disabled()
+        state['eligibility_down'] = False
+        page.get_by_role('button', name='Обновить отчёт').click()
+        picker = page.locator('.research-picker')
+        expect(picker).to_be_enabled()
+        page.set_viewport_size({'width': 320, 'height': 844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'Participant picker overflowed mobile'
+
+        page.get_by_label('Поиск пользователей').fill('test1@')
+        picker.locator('.research-picker-user').get_by_role('checkbox').check()
+        page.get_by_label('Поиск пользователей').fill('test2@')
+        picker.locator('.research-picker-user').get_by_role('checkbox').check()
+        expect(picker.get_by_role('status')).to_contain_text('Выбрано: 2')
+        page.get_by_label('Поиск пользователей').fill('')
+        page.get_by_label('Показывать', exact=False).select_option('all')
+        expect(picker.locator('.research-picker-user').filter(has_text='test16@').get_by_role('checkbox')).to_be_disabled()
+        page.get_by_label('Показывать', exact=False).select_option('selected')
+        expect(picker.locator('.research-picker-user')).to_have_count(2)
+        expect(page.locator('textarea[placeholder^="Например: 12"]')).to_have_count(0)
         page.get_by_role('button', name='Добавить и выдать доступ').click()
         expect(page.get_by_text('Участников добавлено: 2.', exact=False)).to_be_visible()
         assert state['assigned'] and not state['errors'], state['errors']
+        page.get_by_label('Показывать', exact=False).select_option('all')
+        page.get_by_label('Поиск пользователей').fill('test1@')
+        expect(picker.locator('.research-picker-user').get_by_role('checkbox')).to_be_disabled()
         student = browser.new_context()
         student.add_init_script("localStorage.setItem('cringearium_token', 'student-test')")
         student.route('**/api/**', api)

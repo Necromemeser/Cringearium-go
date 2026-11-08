@@ -112,6 +112,7 @@ jobs:
           DEEPSEEK_API_URL=http://localhost:9999
           DEEPSEEK_API_KEY=ci_api_key
           EOF
+          python3 -c "import secrets; print('ADMIN_PASSWORD=' + secrets.token_urlsafe(32))" >> .env
 
       - name: Build containers
         run: docker compose build

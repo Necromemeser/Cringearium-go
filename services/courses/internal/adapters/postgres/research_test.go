@@ -143,6 +143,42 @@ func TestResearchProtocolSnapshotsAllocationAndVersionedOutcomes(t *testing.T) {
 	if err := conn.Get(&count, `SELECT count(*) FROM research_participants WHERE study_id=$1 AND user_id=209`, trial.ID); err != nil || count != 0 {
 		t.Fatal("partial failed batch persisted")
 	}
+
+	// The picker must predict the same eligibility rules as assignment, including stale data.
+	exclusions, err := service.Exclusions(ctx, trial.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := map[int64]string{}
+	for _, item := range exclusions {
+		blocked[item.UserID] = item.Reason
+	}
+	if blocked[101] != "prior_course_access" || blocked[201] != "already_assigned" || blocked[209] != "" {
+		t.Fatal("picker and assignment disagree", blocked)
+	}
+	// Previous learning without an access row must still be excluded from prospective randomization.
+	if _, err := conn.Exec(`DELETE FROM course_access WHERE user_id=103`); err != nil {
+		t.Fatal(err)
+	}
+	exclusions, err = service.Exclusions(ctx, trial.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range exclusions {
+		blocked[item.UserID] = item.Reason
+	}
+	if blocked[103] != "prior_learning" {
+		t.Fatal("prior results hidden from eligibility", blocked)
+	}
+	exclusions, err = service.Exclusions(ctx, study.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range exclusions {
+		if item.Reason != "already_assigned" {
+			t.Fatal("observational enrollment wrongly blocks experienced learners", item)
+		}
+	}
 	// A changed outcome form cannot silently enter a new paired experiment.
 	if _, err := conn.Exec(`UPDATE test_questions q SET question=q.question||' изменено' FROM tests t JOIN course_pages p ON p.id=t.page_id JOIN course_sections s ON s.id=p.section_id WHERE q.test_id=t.id AND s.course_id=$1`, adaptive); err != nil {
 		t.Fatal(err)

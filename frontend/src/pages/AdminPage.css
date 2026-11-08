@@ -248,3 +248,30 @@
 .research-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 0 0; }
 .research-dashboard .button:disabled { opacity: .5; cursor: not-allowed; }
 @media(max-width: 760px) { .research-body { padding: 16px; } .research-form, .research-groups, .research-charts, .research-funnel { grid-template-columns: 1fr; } .research-dashboard .admin-card-heading { align-items: start; flex-direction: column; } .research-toolbar select { max-width: 100%; } .research-groups dl div { flex-wrap: wrap; } }
+
+.research-assign { max-width: none; }
+.research-picker { min-width: 0; margin: 0; padding: 18px; border: 1px solid #dce4ef; border-radius: 12px; }
+.research-picker legend { padding: 0 8px; font-weight: 700; }
+.research-picker-controls { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.research-picker-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.research-picker-actions > strong { margin-right: auto; font-size: .9rem; color: #34577e; }
+.research-picker-list { max-height: 360px; overflow-y: auto; border: 1px solid #e4eaf2; border-radius: 9px; }
+.research-picker label.research-picker-user { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #e7edf5; cursor: pointer; }
+.research-picker-user:last-child { border-bottom: 0; }
+.research-picker-user:hover { background: #f5f8fd; }
+.research-picker-user > input { flex: 0 0 auto; width: 18px; height: 18px; }
+.research-picker-user > span { min-width: 0; overflow-wrap: anywhere; }
+.research-picker-user strong, .research-picker-user small { display: block; }
+.research-picker-user small { color: #65768d; font-size: .83rem; }
+.research-picker-reason { margin-left: auto; max-width: 40%; text-align: right; color: #65768d; font-size: .8rem; }
+.research-picker-user.unavailable { background: #f5f6f8; cursor: default; }
+.research-picker:disabled { opacity: .65; }
+.research-picker:disabled button { cursor: wait; }
+.research-engagement { margin: 28px 0; }
+@media(max-width: 600px) {
+ .research-picker { padding: 12px; }
+ .research-picker-controls { grid-template-columns: 1fr; }
+ .research-picker label.research-picker-user { flex-wrap: wrap; }
+ .research-picker-user .research-picker-reason { max-width: none; margin-left: 30px; text-align: left; flex-basis: 100%; }
+ .research-picker .research-pagination { flex-wrap: wrap; }
+}

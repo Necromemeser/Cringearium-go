@@ -3,14 +3,18 @@ export type ResearchStudy = {
   control_course_id: number; adaptive_course_id: number; pre_hash: string; post_hash: string; content_hash: string
   protocol_notes: string; created_at: string
 }
+export type ResearchExclusion = { user_id: number; reason: string }
 export type ResearchParticipant = {
+ ai_window_answers: number | null; pre_attempts: number; post_attempts: number; progress_percent: number | null; calendar_days: number | null;
   participant_id: string; account_id: number; arm: 'control' | 'adaptive'; course_id: number; assigned_at: string
   pre_score: number | null; post_score: number | null; gain: number | null; pre_id: number | null; post_id: number | null
   pre_at: string | null; post_at: string | null; eligible: boolean; flags: string[]; completed_pages: number; total_pages: number
   ai_sessions: number | null; ai_answers: number | null; ai_correct: number | null
 }
 export type Summary = { n: number; mean: number | null; median: number | null; sd: number | null; ci_low: number | null; ci_high: number | null }
+export type Engagement = { improved: number; unchanged: number; declined: number; improvement_rate: number | null; progress: Summary; calendar_days: Summary; ai_sessions: Summary; ai_answers: Summary; pre_attempts: Summary; post_attempts: Summary; ai_accuracy: number | null; ai_total_answers: number }
 export type ResearchGroup = {
+ engagement: Engagement;
   arm: 'control' | 'adaptive'; assigned: number; with_pre: number; with_post: number; paired: number; finished_course: number
   post_completion: number | null; pre: Summary; post: Summary; gain: Summary
 }
@@ -37,3 +41,5 @@ export async function downloadResearchCSV(token: string, id: number, dataset: st
   const link = document.createElement('a'); link.href = url; link.download = `study-${id}-${dataset}.csv`; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+export const getResearchExclusions = (token: string, id: number) => request<ResearchExclusion[]>(token, `/${id}/exclusions`)

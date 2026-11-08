@@ -33,24 +33,26 @@ func TestResearchReadWriteAndExportRequireAdmin(t *testing.T) {
 	coursesURL, _ := url.Parse(upstream.URL)
 	authURL, _ := url.Parse(auth.URL)
 	gateway := &Gateway{coursesURL: coursesURL, authURL: authURL, client: http.DefaultClient, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	for _, method := range []string{"GET", "POST"} {
-		for _, test := range []struct {
-			token  string
-			status int
-		}{{"", 401}, {"student-test", 403}, {"admin-test", 200}} {
-			req := httptest.NewRequest(method, "/api/admin/research/studies/1/export?dataset=participants", nil)
-			req.Header.Set("X-User-ID", "1")
-			if test.token != "" {
-				req.Header.Set("Authorization", "Bearer "+test.token)
-			}
-			response := httptest.NewRecorder()
-			gateway.researchProxy().ServeHTTP(response, req)
-			if response.Code != test.status {
-				t.Fatalf("%s %s: got %d", method, test.token, response.Code)
+	for _, path := range []string{"/api/admin/research/studies/1/export?dataset=participants", "/api/admin/research/studies/1/exclusions"} {
+		for _, method := range []string{"GET", "POST"} {
+			for _, test := range []struct {
+				token  string
+				status int
+			}{{"", 401}, {"student-test", 403}, {"admin-test", 200}} {
+				req := httptest.NewRequest(method, path, nil)
+				req.Header.Set("X-User-ID", "1")
+				if test.token != "" {
+					req.Header.Set("Authorization", "Bearer "+test.token)
+				}
+				response := httptest.NewRecorder()
+				gateway.researchProxy().ServeHTTP(response, req)
+				if response.Code != test.status {
+					t.Fatalf("%s %s: got %d", method, test.token, response.Code)
+				}
 			}
 		}
 	}
-	if hits != 2 {
+	if hits != 4 {
 		t.Fatalf("non-admin reached research service: %d", hits)
 	}
 }

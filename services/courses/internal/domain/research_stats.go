@@ -14,16 +14,17 @@ type SummaryStats struct {
 	CIHigh *float64 `json:"ci_high"`
 }
 type ResearchGroupMetrics struct {
-	Arm            string       `json:"arm"`
-	Assigned       int          `json:"assigned"`
-	WithPre        int          `json:"with_pre"`
-	WithPost       int          `json:"with_post"`
-	Paired         int          `json:"paired"`
-	FinishedCourse int          `json:"finished_course"`
-	PostCompletion *float64     `json:"post_completion"`
-	Pre            SummaryStats `json:"pre"`
-	Post           SummaryStats `json:"post"`
-	Gain           SummaryStats `json:"gain"`
+	Engagement     ResearchEngagementMetrics `json:"engagement"`
+	Arm            string                    `json:"arm"`
+	Assigned       int                       `json:"assigned"`
+	WithPre        int                       `json:"with_pre"`
+	WithPost       int                       `json:"with_post"`
+	Paired         int                       `json:"paired"`
+	FinishedCourse int                       `json:"finished_course"`
+	PostCompletion *float64                  `json:"post_completion"`
+	Pre            SummaryStats              `json:"pre"`
+	Post           SummaryStats              `json:"post"`
+	Gain           SummaryStats              `json:"gain"`
 }
 type ResearchComparison struct {
 	GainDifference       *float64 `json:"gain_difference"`
@@ -123,6 +124,7 @@ func groupMetrics(arm string, rows []ResearchParticipant) ResearchGroupMetrics {
 	if result.Assigned > 0 {
 		result.PostCompletion = fptr(100 * float64(result.WithPost) / float64(result.Assigned))
 	}
+	result.Engagement = summarizeEngagement(arm, rows)
 	result.Pre = Summarize(pre)
 	result.Post = Summarize(post)
 	result.Gain = Summarize(gain)

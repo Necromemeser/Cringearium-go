@@ -1,18 +1,4 @@
+-- Passwords cannot be safely configured through a static SQL seed.
+-- The auth startup bootstrap configures admin@mail.ru from ADMIN_PASSWORD.
+-- Keep pgcrypto available for the following student seed migration.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-INSERT INTO users (
-    username,
-    email,
-    password_hash,
-    role
-)
-VALUES (
-    'admin',
-    'admin@mail.ru',
-    crypt('admin123', gen_salt('bf', 12)),
-    'admin'
-)
-ON CONFLICT (email) DO UPDATE
-SET username = EXCLUDED.username,
-    password_hash = EXCLUDED.password_hash,
-    role = EXCLUDED.role;
